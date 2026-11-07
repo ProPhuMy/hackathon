@@ -1,0 +1,19 @@
+[project]
+name = "fridge-backend"
+version = "0.1.0"
+description = "Fridge Tracker backend service"
+requires-python = ">=3.11,<3.12"
+dependencies = []
+
+[project.scripts]
+fridge-backend = "fridge_backend:main"
+
+[build-system]
+requires = ["uv_build>=0.13.2,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "jsonschema>=4.26.0",
+    "pytest>=9.2.0",
+]
