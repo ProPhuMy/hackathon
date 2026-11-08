@@ -3,8 +3,8 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from src.geometry import Box, DoorLine, Track
-from src.detect import (
+from src.core.geometry import Box, DoorLine, Track
+from src.vision.detect import (
     Detector,
     GDinoDetector,
     phrase_to_class,
@@ -229,7 +229,7 @@ def test_probe_command_flow(tmp_path: Path):
     mock_writer = MagicMock()
 
     with patch("src.config.load", return_value=cfg), \
-         patch("src.detect.Detector", return_value=mock_detector), \
+         patch("src.vision.detect.Detector", return_value=mock_detector), \
          patch("src.__main__.iter_frames", return_value=iter(frames)), \
          patch("cv2.VideoWriter", return_value=mock_writer):
         probe_command("test_clip.mp4", str(out_video), config_path="dummy.json")
@@ -321,7 +321,7 @@ def test_probe_command_selects_gdino(tmp_path: Path):
     mock_writer = MagicMock()
 
     with patch("src.config.load", return_value=cfg), \
-         patch("src.detect.GDinoDetector", return_value=mock_gdino) as mock_gdino_cls, \
+         patch("src.vision.detect.GDinoDetector", return_value=mock_gdino) as mock_gdino_cls, \
          patch("src.__main__.iter_frames", return_value=iter(frames)), \
          patch("cv2.VideoWriter", return_value=mock_writer):
         probe_command("clip.mp4", str(tmp_path / "out.mp4"), detector="gdino")
@@ -356,7 +356,7 @@ def test_evaluate_command_selects_gdino(tmp_path: Path, monkeypatch):
     mock_gdino.return_value = []
     mock_factory = MagicMock(return_value=mock_gdino)
 
-    with patch("src.detect.GDinoDetector", mock_factory):
+    with patch("src.vision.detect.GDinoDetector", mock_factory):
         evaluate_command(
             labels_path=str(labels_file),
             clips_dir=str(clips_dir),
@@ -387,7 +387,7 @@ def test_run_command_selects_gdino(tmp_path: Path, monkeypatch):
     mock_gdino = MagicMock()
     mock_gdino_cls = MagicMock(return_value=mock_gdino)
 
-    with patch("src.detect.GDinoDetector", mock_gdino_cls):
+    with patch("src.vision.detect.GDinoDetector", mock_gdino_cls):
         run_command(
             source="dummy.mp4",
             config_path=str(cfg_file),

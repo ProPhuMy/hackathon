@@ -2,11 +2,11 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from src.geometry import Box, Track
+from src.core.geometry import Box, Track
 
 
 def test_segmenter_empty_items_no_model_call(monkeypatch):
-    from src.segment import Segmenter
+    from src.vision.segment import Segmenter
 
     mock_sam_cls = MagicMock()
     mock_sam_instance = MagicMock()
@@ -23,7 +23,7 @@ def test_segmenter_empty_items_no_model_call(monkeypatch):
 
 
 def test_segmenter_calls_sam_with_bboxes_and_returns_masks(monkeypatch):
-    from src.segment import Segmenter
+    from src.vision.segment import Segmenter
 
     item1 = Track(10, "item", Box(10.0, 20.0, 30.0, 40.0), 0.9, "bottle")
     item2 = Track(20, "item", Box(50.0, 60.0, 70.0, 80.0), 0.8, "can")
@@ -64,7 +64,7 @@ def test_segmenter_calls_sam_with_bboxes_and_returns_masks(monkeypatch):
 
 
 def test_segmenter_handles_none_masks(monkeypatch):
-    from src.segment import Segmenter
+    from src.vision.segment import Segmenter
 
     mock_result = MagicMock()
     mock_result.masks = None

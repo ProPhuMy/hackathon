@@ -4,7 +4,7 @@ import pytest
 
 from src.config import Config, save
 from src.evaluate import evaluate_command, score
-from src.geometry import DoorLine
+from src.core.geometry import DoorLine
 
 
 def test_score_exact():
@@ -146,19 +146,19 @@ def test_evaluate_with_embed_instantiates_embedder_once(tmp_path: Path, monkeypa
     monkeypatch.setattr("src.stream.iter_frames", lambda src: iter([]))
     mock_embedder_instance = MagicMock()
     mock_embedder_cls = MagicMock(return_value=mock_embedder_instance)
-    monkeypatch.setattr("src.embed.Embedder", mock_embedder_cls)
+    monkeypatch.setattr("src.vision.embed.Embedder", mock_embedder_cls)
 
     pipelines_built = []
     real_init = None
 
-    from src.pipeline import ItemPipeline
+    from src.core.pipeline import ItemPipeline
     original_init = ItemPipeline.__init__
 
     def spy_init(self, *args, **kwargs):
         original_init(self, *args, **kwargs)
         pipelines_built.append(self)
 
-    monkeypatch.setattr("src.pipeline.ItemPipeline.__init__", spy_init)
+    monkeypatch.setattr("src.core.pipeline.ItemPipeline.__init__", spy_init)
 
     evaluate_command(
         labels_path=str(labels_file),
@@ -199,17 +199,17 @@ def test_evaluate_with_holding_mask_instantiates_segmenter_once(tmp_path: Path, 
     monkeypatch.setattr("src.stream.iter_frames", lambda src: iter([]))
     mock_segmenter_instance = MagicMock()
     mock_segmenter_cls = MagicMock(return_value=mock_segmenter_instance)
-    monkeypatch.setattr("src.segment.Segmenter", mock_segmenter_cls)
+    monkeypatch.setattr("src.vision.segment.Segmenter", mock_segmenter_cls)
 
     pipelines_built = []
-    from src.pipeline import ItemPipeline
+    from src.core.pipeline import ItemPipeline
     original_init = ItemPipeline.__init__
 
     def spy_init(self, *args, **kwargs):
         original_init(self, *args, **kwargs)
         pipelines_built.append(self)
 
-    monkeypatch.setattr("src.pipeline.ItemPipeline.__init__", spy_init)
+    monkeypatch.setattr("src.core.pipeline.ItemPipeline.__init__", spy_init)
 
     evaluate_command(
         labels_path=str(labels_file),

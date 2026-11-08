@@ -6,10 +6,10 @@ import numpy as np
 import pytest
 
 from src.config import Config
-from src.gallery import ItemGallery
-from src.geometry import Box, DoorLine, Track
-from src.pipeline import ItemPipeline
-from src.session import Trip
+from src.core.gallery import ItemGallery
+from src.core.geometry import Box, DoorLine, Track
+from src.core.pipeline import ItemPipeline
+from src.core.session import Trip
 
 SCHEMA = json.loads(
     (Path(__file__).parents[3] / "contracts" / "item.event.schema.json").read_text()
@@ -430,25 +430,25 @@ def test_cli_run_command_with_holding_mask(tmp_path: Path, monkeypatch, capsys):
 
     mock_segmenter_instance = MagicMock()
     mock_segmenter_cls = MagicMock(return_value=mock_segmenter_instance)
-    monkeypatch.setattr("src.segment.Segmenter", mock_segmenter_cls)
+    monkeypatch.setattr("src.vision.segment.Segmenter", mock_segmenter_cls)
 
     pipelines_built = []
-    from src.pipeline import ItemPipeline
+    from src.core.pipeline import ItemPipeline
     original_init = ItemPipeline.__init__
 
     def spy_init(self, *args, **kwargs):
         original_init(self, *args, **kwargs)
         pipelines_built.append(self)
 
-    monkeypatch.setattr("src.pipeline.ItemPipeline.__init__", spy_init)
+    monkeypatch.setattr("src.core.pipeline.ItemPipeline.__init__", spy_init)
 
-    monkeypatch.setattr("src.detect.Detector", MagicMock())
+    monkeypatch.setattr("src.vision.detect.Detector", MagicMock())
     monkeypatch.setattr(
         "src.__main__.iter_frames",
         lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
     )
     monkeypatch.setattr(
-        "src.pipeline.ItemPipeline.process",
+        "src.core.pipeline.ItemPipeline.process",
         lambda self, f, ts: [test_ev],
     )
 
@@ -480,15 +480,15 @@ def test_cli_run_command_with_embed(tmp_path: Path, monkeypatch, capsys):
 
     mock_embedder_instance = MagicMock()
     mock_embedder_cls = MagicMock(return_value=mock_embedder_instance)
-    monkeypatch.setattr("src.embed.Embedder", mock_embedder_cls)
+    monkeypatch.setattr("src.vision.embed.Embedder", mock_embedder_cls)
 
-    monkeypatch.setattr("src.detect.Detector", MagicMock())
+    monkeypatch.setattr("src.vision.detect.Detector", MagicMock())
     monkeypatch.setattr(
         "src.__main__.iter_frames",
         lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
     )
     monkeypatch.setattr(
-        "src.pipeline.ItemPipeline.process",
+        "src.core.pipeline.ItemPipeline.process",
         lambda self, f, ts: [test_ev],
     )
 
@@ -516,13 +516,13 @@ def test_cli_run_command_dry_run(tmp_path: Path, monkeypatch, capsys):
     test_ev = item_event("PUT", "item_123", "bottle", 0.9, ts="2026-11-07T20:00:01.000Z")
     frame = np.full((300, 300, 3), 10, dtype=np.uint8)
 
-    monkeypatch.setattr("src.detect.Detector", MagicMock())
+    monkeypatch.setattr("src.vision.detect.Detector", MagicMock())
     monkeypatch.setattr(
         "src.__main__.iter_frames",
         lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
     )
     monkeypatch.setattr(
-        "src.pipeline.ItemPipeline.process",
+        "src.core.pipeline.ItemPipeline.process",
         lambda self, f, ts: [test_ev],
     )
 
@@ -551,13 +551,13 @@ def test_cli_run_command_kafka_publish(tmp_path: Path, monkeypatch):
     test_ev = item_event("PUT", "item_456", "can", 0.88, ts="2026-11-07T20:00:01.000Z")
     frame = np.full((300, 300, 3), 10, dtype=np.uint8)
 
-    monkeypatch.setattr("src.detect.Detector", MagicMock())
+    monkeypatch.setattr("src.vision.detect.Detector", MagicMock())
     monkeypatch.setattr(
         "src.__main__.iter_frames",
         lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
     )
     monkeypatch.setattr(
-        "src.pipeline.ItemPipeline.process",
+        "src.core.pipeline.ItemPipeline.process",
         lambda self, f, ts: [test_ev],
     )
 
@@ -597,13 +597,13 @@ def test_cli_run_command_debug_video(tmp_path: Path, monkeypatch):
     save(Config(roi=(0, 0, 50, 50), line=line, door_on=100.0, door_off=50.0), cfg_file)
 
     frame = np.full((100, 100, 3), 10, dtype=np.uint8)
-    monkeypatch.setattr("src.detect.Detector", MagicMock())
+    monkeypatch.setattr("src.vision.detect.Detector", MagicMock())
     monkeypatch.setattr(
         "src.__main__.iter_frames",
         lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
     )
     monkeypatch.setattr(
-        "src.pipeline.ItemPipeline.process",
+        "src.core.pipeline.ItemPipeline.process",
         lambda self, f, ts: [],
     )
 
@@ -633,9 +633,9 @@ def test_cli_run_latency_print(tmp_path: Path, monkeypatch, capsys):
 
     frame = np.full((50, 50, 3), 10, dtype=np.uint8)
     frames = [(frame, f"2026-11-07T20:00:{i:02d}.000Z") for i in range(100)]
-    monkeypatch.setattr("src.detect.Detector", MagicMock())
+    monkeypatch.setattr("src.vision.detect.Detector", MagicMock())
     monkeypatch.setattr("src.__main__.iter_frames", lambda src: iter(frames))
-    monkeypatch.setattr("src.pipeline.ItemPipeline.process", lambda self, f, ts: [])
+    monkeypatch.setattr("src.core.pipeline.ItemPipeline.process", lambda self, f, ts: [])
 
     run_command(
         source="dummy_src",
@@ -738,7 +738,7 @@ def test_cli_run_command_flushes_on_shutdown(tmp_path: Path, monkeypatch, capsys
         [hand(1, 100.0, 150.0), item(10, 100.0, 150.0, label="juice", conf=0.85)],
     ]
     detector = ScriptedDetector(script)
-    monkeypatch.setattr("src.detect.Detector", lambda *args, **kwargs: detector)
+    monkeypatch.setattr("src.vision.detect.Detector", lambda *args, **kwargs: detector)
 
     bright_frame = np.full((300, 300, 3), 200, dtype=np.uint8)
     frames = [
@@ -773,7 +773,7 @@ def test_shutdown_cleanup_on_flush_error(tmp_path: Path, monkeypatch):
     save(Config(roi=(0, 0, 50, 50), line=line, door_on=100.0, door_off=50.0), cfg_file)
 
     frame = np.full((100, 100, 3), 10, dtype=np.uint8)
-    monkeypatch.setattr("src.detect.Detector", MagicMock())
+    monkeypatch.setattr("src.vision.detect.Detector", MagicMock())
     monkeypatch.setattr(
         "src.__main__.iter_frames",
         lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
@@ -781,11 +781,11 @@ def test_shutdown_cleanup_on_flush_error(tmp_path: Path, monkeypatch):
 
     flushed_ev = item_event("PUT", "item_err", "coke", 0.9, ts="2026-11-07T20:00:02.000Z")
     monkeypatch.setattr(
-        "src.pipeline.ItemPipeline.process",
+        "src.core.pipeline.ItemPipeline.process",
         lambda self, f, ts: [],
     )
     monkeypatch.setattr(
-        "src.pipeline.ItemPipeline.close",
+        "src.core.pipeline.ItemPipeline.close",
         lambda self: [flushed_ev],
     )
 
@@ -827,7 +827,7 @@ def test_shutdown_order_and_flush_warning_and_delivery_callback(tmp_path: Path, 
     save(Config(roi=(0, 0, 50, 50), line=line, door_on=100.0, door_off=50.0), cfg_file)
 
     frame = np.full((100, 100, 3), 10, dtype=np.uint8)
-    monkeypatch.setattr("src.detect.Detector", MagicMock())
+    monkeypatch.setattr("src.vision.detect.Detector", MagicMock())
     monkeypatch.setattr(
         "src.__main__.iter_frames",
         lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
@@ -835,11 +835,11 @@ def test_shutdown_order_and_flush_warning_and_delivery_callback(tmp_path: Path, 
 
     ev = item_event("PUT", "item-1", "coke", 0.9, ts="2026-11-07T20:00:01.000Z")
     monkeypatch.setattr(
-        "src.pipeline.ItemPipeline.process",
+        "src.core.pipeline.ItemPipeline.process",
         lambda self, f, ts: [ev],
     )
     monkeypatch.setattr(
-        "src.pipeline.ItemPipeline.close",
+        "src.core.pipeline.ItemPipeline.close",
         lambda self: [],
     )
 

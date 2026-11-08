@@ -1,7 +1,7 @@
 import pytest
 
-from src.geometry import Box, Track
-from src.shelf import shelf_diff
+from src.core.geometry import Box, Track
+from src.core.shelf import shelf_diff
 
 
 def make_item(id: int, label: str, box: Box, conf: float = 0.9) -> Track:

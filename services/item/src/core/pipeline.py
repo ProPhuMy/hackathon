@@ -3,9 +3,9 @@ from __future__ import annotations
 from typing import Callable
 import numpy as np
 
-from .config import Config
+from ..config import Config
 from .door import DoorDetector
-from .events import item_event
+from ..events import item_event
 from .gallery import ItemGallery
 from .geometry import Track
 from .session import DoorSession, Trip

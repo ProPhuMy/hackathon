@@ -58,8 +58,8 @@ def evaluate_command(
 ) -> dict[str, int]:
     """Run ItemPipeline over labeled clips with a fresh temporary gallery and detector per clip."""
     from .config import load
-    from .gallery import ItemGallery
-    from .pipeline import ItemPipeline
+    from .core.gallery import ItemGallery
+    from .core.pipeline import ItemPipeline
     from .stream import iter_frames
 
     expected_by_clip = load_labels(labels_path)
@@ -70,23 +70,23 @@ def evaluate_command(
     cfg = load(config_path)
     if detector_factory is None:
         if detector == "gdino":
-            from .detect import GDinoDetector
+            from .vision.detect import GDinoDetector
 
             detector_factory = GDinoDetector
         else:
-            from .detect import Detector
+            from .vision.detect import Detector
 
             detector_factory = Detector
 
     embedder = None
     if embed:
-        from .embed import Embedder
+        from .vision.embed import Embedder
 
         embedder = Embedder()
 
     segmenter = None
     if holding == "mask":
-        from .segment import Segmenter
+        from .vision.segment import Segmenter
 
         segmenter = Segmenter()
 

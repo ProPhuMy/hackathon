@@ -6,8 +6,8 @@ from typing import Any
 import cv2
 import numpy as np
 
-from .door import measure_brightness
-from .geometry import DoorLine, Point
+from .core.door import measure_brightness
+from .core.geometry import DoorLine, Point
 from .stream import iter_frames
 
 DEFAULT_PROMPTS: list[str] = [

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
-from src.geometry import Box, DoorLine, Track
-from src.session import Crossing, DoorSession, Trip
+from src.core.geometry import Box, DoorLine, Track
+from src.core.session import Crossing, DoorSession, Trip
 
 
 def hand(id: int, cx: float, cy: float, conf: float = 0.9) -> Track:

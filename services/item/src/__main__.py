@@ -42,16 +42,16 @@ def probe_command(
 ) -> None:
     """Run detector and overlay on clip without logic, writing MP4 at 15 fps."""
     from .config import load
-    from .door import DoorDetector
+    from .core.door import DoorDetector
     from .draw import overlay
 
     cfg = load(config_path)
     if detector == "gdino":
-        from .detect import GDinoDetector
+        from .vision.detect import GDinoDetector
 
         detector_model = GDinoDetector(prompts=cfg.prompts, hand_label=cfg.hand_label)
     else:
-        from .detect import Detector
+        from .vision.detect import Detector
 
         detector_model = Detector(prompts=cfg.prompts, hand_label=cfg.hand_label)
 
@@ -95,29 +95,29 @@ def run_command(
     """Run item recognition pipeline, printing events, publishing to Kafka, and tracking latency."""
     from .config import load
     from .draw import overlay
-    from .gallery import ItemGallery
-    from .pipeline import ItemPipeline
+    from .core.gallery import ItemGallery
+    from .core.pipeline import ItemPipeline
 
     cfg = load(config_path)
     gallery = ItemGallery(gallery_path)
     if detector == "gdino":
-        from .detect import GDinoDetector
+        from .vision.detect import GDinoDetector
 
         detector_model = GDinoDetector(prompts=cfg.prompts, hand_label=cfg.hand_label)
     else:
-        from .detect import Detector
+        from .vision.detect import Detector
 
         detector_model = Detector(prompts=cfg.prompts, hand_label=cfg.hand_label)
 
     embedder = None
     if embed:
-        from .embed import Embedder
+        from .vision.embed import Embedder
 
         embedder = Embedder()
 
     segmenter = None
     if holding == "mask":
-        from .segment import Segmenter
+        from .vision.segment import Segmenter
 
         segmenter = Segmenter()
 
@@ -260,11 +260,11 @@ def evaluate_command(
 
     if detector_factory is None:
         if detector == "gdino":
-            from .detect import GDinoDetector
+            from .vision.detect import GDinoDetector
 
             detector_factory = GDinoDetector
         else:
-            from .detect import Detector
+            from .vision.detect import Detector
 
             detector_factory = Detector
 

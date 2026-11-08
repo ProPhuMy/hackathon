@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from src.config import Config, DEFAULT_PROMPTS, load, save, calibrate
-from src.geometry import Box, DoorLine, Track
+from src.core.geometry import Box, DoorLine, Track
 from src.__main__ import parse_args
 
 

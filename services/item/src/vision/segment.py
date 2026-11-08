@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from .geometry import Track
+from ..core.geometry import Track
 
 
 class Segmenter:
