@@ -80,3 +80,45 @@ def test_embedding_stored_and_persisted(tmp_path: Path):
     taken_id, score = g2.take("apple", embedding=np.array([0.5, 0.6]))
     assert taken_id == item_id
     assert score == 1.0
+
+
+def test_empty_file_raises_value_error(tmp_path: Path):
+    path = tmp_path / "gallery.json"
+    path.write_text("", encoding="utf-8")
+    with pytest.raises(ValueError) as excinfo:
+        ItemGallery(path)
+    assert str(path) in str(excinfo.value)
+    assert "fix or delete" in str(excinfo.value).lower()
+
+
+def test_non_dict_json_raises_value_error(tmp_path: Path):
+    path = tmp_path / "gallery.json"
+    path.write_text("[]", encoding="utf-8")
+    with pytest.raises(ValueError) as excinfo:
+        ItemGallery(path)
+    assert str(path) in str(excinfo.value)
+    assert "fix or delete" in str(excinfo.value).lower()
+
+
+def test_item_missing_id_raises_value_error(tmp_path: Path):
+    path = tmp_path / "gallery.json"
+    path.write_text('{"items": [{"label": "milk"}]}', encoding="utf-8")
+    with pytest.raises(ValueError) as excinfo:
+        ItemGallery(path)
+    assert str(path) in str(excinfo.value)
+    assert "fix or delete" in str(excinfo.value).lower()
+
+
+def test_item_empty_id_or_missing_label_raises_value_error(tmp_path: Path):
+    path1 = tmp_path / "gallery1.json"
+    path1.write_text('{"items": [{"id": "", "label": "milk"}]}', encoding="utf-8")
+    with pytest.raises(ValueError) as excinfo1:
+        ItemGallery(path1)
+    assert str(path1) in str(excinfo1.value)
+
+    path2 = tmp_path / "gallery2.json"
+    path2.write_text('{"items": [{"id": "item_123"}]}', encoding="utf-8")
+    with pytest.raises(ValueError) as excinfo2:
+        ItemGallery(path2)
+    assert str(path2) in str(excinfo2.value)
+

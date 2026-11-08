@@ -14,9 +14,34 @@ class ItemGallery:
         self.path = Path(path)
         self._items: list[dict] = []
         if self.path.exists():
-            with open(self.path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            self._items = data.get("items", [])
+            try:
+                with open(self.path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception as exc:
+                raise ValueError(
+                    f"Corrupt or unreadable gallery file at '{self.path}': please fix or delete it."
+                ) from exc
+
+            if not isinstance(data, dict) or not isinstance(data.get("items"), list):
+                raise ValueError(
+                    f"Corrupt or invalid gallery file at '{self.path}': please fix or delete it."
+                )
+
+            items: list[dict] = []
+            for item in data["items"]:
+                if not isinstance(item, dict):
+                    raise ValueError(
+                        f"Corrupt or invalid item in gallery file at '{self.path}': please fix or delete it."
+                    )
+                item_id = item.get("id")
+                label = item.get("label")
+                if not isinstance(item_id, str) or not item_id or not isinstance(label, str):
+                    raise ValueError(
+                        f"Corrupt or invalid item in gallery file at '{self.path}': please fix or delete it."
+                    )
+                embedding = item.get("embedding", None)
+                items.append({"id": item_id, "label": label, "embedding": embedding})
+            self._items = items
 
     def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
