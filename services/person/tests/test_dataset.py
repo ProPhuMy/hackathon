@@ -74,3 +74,14 @@ def test_calibrate_and_evaluate_video_manifests_end_to_end(tmp_path, monkeypatch
     assert report['known_correct'] == report['known_total'] == 2
     assert report['unknown_false_accepts'] == 0
     assert report['unknown_total'] == 1
+
+
+def test_same_recording_cannot_be_counted_as_two_encounters(tmp_path):
+    (tmp_path / 'a.avi').write_bytes(b'one-recording')
+    (tmp_path / 'copy.avi').write_bytes(b'one-recording')
+    manifest = tmp_path / 'dev.csv'
+    manifest.write_text('path,person_id,session_id,split,start_s,end_s\n'
+                        'a.avi,a,s1,development,0,1\n'
+                        'copy.avi,a,s2,development,0,1\n')
+    with pytest.raises(ValueError, match='recording'):
+        read_manifest(manifest, 'development')

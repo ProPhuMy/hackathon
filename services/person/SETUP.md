@@ -58,9 +58,10 @@ Recorded clips additionally require `--replay-origin 2026-11-08T09:00:00Z`.
 Live events use host receipt time; recorded events preserve presentation time.
 Do not feed historical replay events into live alerts. Enrollment collects 20
 usable observations, stores one normalized averaged template,
-and retains no images. Capture failure exits clearly; restart to reconnect,
-which starts fresh evidence and segment IDs. Network capture has OpenCV timeouts
-and a killable process; automatic reconnection is not implemented.
+and retains no images. Live capture retries up to three times per invocation
+with 1/2/4-second backoff, a new queue, fresh evidence, and a new segment ID.
+Recorded-file failures exit without reconnecting. Network capture has OpenCV
+timeouts and a killable process; exhausted retries exit with an error.
 
 ## Calibrate and evaluate on independent recordings
 
@@ -127,3 +128,13 @@ retries; it stops visibly on delivery failure rather than accumulating events.
 - Docker is not installed on this host; real Redpanda publication/consumption
   has not been tested. Use an already reachable broker or coordinate local
   infrastructure setup with its owner.
+
+
+## Follow-up verification
+
+38 tests pass, including disconnect/reconnect boundaries, bounded retries,
+model-independent enrollment removal, and duplicate-recording rejection within
+a manifest. Webcam 0 was attempted without saving images; macOS denied camera
+access. Live capture could not be verified. Grant camera access to the host app
+in System Settings > Privacy & Security > Camera, or provide a reachable phone
+MJPEG URL. No camera permission settings were changed by the service.

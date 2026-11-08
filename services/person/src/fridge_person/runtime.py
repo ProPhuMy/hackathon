@@ -25,11 +25,12 @@ def segment_id(path):
 
 
 def execute(args):
+    if args.command == 'remove':
+        metadata = json.loads(args.gallery.read_text())
+        Gallery(args.gallery, metadata['model']).remove(args.person_id)
+        return
     vision = Vision(args.detector, args.recognizer)
     gallery = Gallery(args.gallery, vision.signature)
-    if args.command == 'remove':
-        gallery.remove(args.person_id)
-        return
     if args.command == 'enroll' and args.person_id in gallery.people:
         raise ValueError('Already enrolled; remove explicitly before re-enrollment')
     origin = None
@@ -65,6 +66,14 @@ def execute(args):
     try:
         with Capture(args.source, origin) as capture:
             for image, received, timestamp in capture:
+                if image is None:
+                    if engine is not None:
+                        engine.reset()
+                    samples.clear()
+                    previous_enrollment_time = None
+                    last_sample = -float('inf')
+                    track = None
+                    continue
                 if Gallery(args.gallery, vision.signature).fingerprint != gallery.fingerprint:
                     raise ValueError('Gallery changed; restart and recalibrate before publishing')
                 now = time.monotonic()

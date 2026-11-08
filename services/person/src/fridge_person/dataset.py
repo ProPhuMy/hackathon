@@ -20,6 +20,7 @@ def read_manifest(path, split):
             raise ValueError('Manifest needs path,person_id,session_id,split,start_s,end_s')
         rows = []
         sessions = set()
+        recordings = set()
         for row in reader:
             if row['split'] != split:
                 raise ValueError(f'Manifest split must be {split}')
@@ -30,8 +31,12 @@ def read_manifest(path, split):
             if not math.isfinite(start) or not math.isfinite(end) or not 0 <= start < end:
                 raise ValueError('Invalid encounter time range')
             source = (path.parent / row['path']).resolve()
+            digest = file_hash(source)
+            if digest in recordings:
+                raise ValueError('Duplicate recording; each encounter needs an independent capture')
+            recordings.add(digest)
             rows.append(dict(path=str(source), person_id=row['person_id'] or None,
-                             session_id=row['session_id'], sha256=file_hash(source),
+                             session_id=row['session_id'], sha256=digest,
                              start_s=start, end_s=end))
     if not rows:
         raise ValueError('Manifest is empty')

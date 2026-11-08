@@ -73,33 +73,55 @@ def _read(source, output, stop, replay_origin):
 
 class Capture:
     def __init__(self, source, replay_origin=None):
-        if Path(source).is_file() and replay_origin is None:
+        self.source, self.replay_origin = source, replay_origin
+        self.live = isinstance(source_value(source), int) or not Path(source).is_file()
+        if not self.live and replay_origin is None:
             raise ValueError('Recorded video requires --replay-origin in UTC')
+        self.process = None
+
+    def _start(self):
         context = mp.get_context('spawn')
         self.output = context.Queue(maxsize=1)
         self.stop = context.Event()
-        self.process = context.Process(target=_read, args=(source, self.output, self.stop, replay_origin), daemon=True)
-
-    def __enter__(self):
+        self.process = context.Process(target=_read, args=(self.source, self.output, self.stop, self.replay_origin), daemon=True)
         self.process.start()
-        return self
 
-    def __iter__(self):
-        while True:
-            try:
-                kind, payload = self.output.get(timeout=10)
-            except queue.Empty:
-                raise RuntimeError('Capture timed out; restart to reconnect with fresh evidence') from None
-            if kind == 'end':
-                return
-            if kind == 'error':
-                raise RuntimeError(payload)
-            yield payload
-
-    def __exit__(self, *exception):
+    def _close(self):
+        if self.process is None:
+            return
         self.stop.set()
         self.process.join(timeout=1)
         if self.process.is_alive():
             self.process.terminate()
             self.process.join(timeout=2)
         self.output.close()
+
+    def __enter__(self):
+        self._start()
+        return self
+
+    def __iter__(self):
+        reconnects = 0
+        while True:
+            try:
+                kind, payload = self.output.get(timeout=10)
+            except queue.Empty:
+                kind, payload = 'error', 'Capture timed out'
+            if kind == 'end':
+                return
+            if kind == 'error':
+                if not self.live:
+                    raise RuntimeError(payload)
+                self._close()
+                if reconnects >= 3:
+                    raise RuntimeError('Capture failed after three reconnect attempts')
+                # Boundary clears all evidence before a replacement capture can be used.
+                yield None, time.monotonic(), None
+                time.sleep(2 ** reconnects)
+                reconnects += 1
+                self._start()
+                continue
+            yield payload
+
+    def __exit__(self, *exception):
+        self._close()

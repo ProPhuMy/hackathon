@@ -101,3 +101,25 @@ def test_failed_broker_callback_is_not_reported_as_success(tmp_path, monkeypatch
     args.broker = 'fake-broker'
     with pytest.raises(RuntimeError, match='delivery failed'):
         runtime.execute(args)
+
+
+def test_remove_does_not_need_model_weights_or_camera(tmp_path, monkeypatch):
+    args = setup_runtime(tmp_path, monkeypatch, [], command='remove')
+    args.person_id = 'a'
+    def unavailable(*args):
+        raise AssertionError('Removal must not load face models')
+    monkeypatch.setattr(runtime, 'Vision', unavailable)
+    runtime.execute(args)
+    assert Gallery(args.gallery, 'test-model').people == {}
+
+
+def test_reconnect_boundary_requires_fresh_evidence_and_segment(tmp_path, monkeypatch, capsys):
+    frames = [frame(t) for t in (0., .2, .4)]
+    frames += [(None, 100., None)]
+    frames += [frame(t) for t in (.6, .8, 1.)]
+    args = setup_runtime(tmp_path, monkeypatch, frames)
+    runtime.execute(args)
+    events = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert len(events) == 2
+    assert events[1]['track_id'] != events[0]['track_id']
+    assert events[1]['ts'].endswith('01.000Z')
