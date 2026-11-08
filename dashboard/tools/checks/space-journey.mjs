@@ -252,6 +252,48 @@ for (const asp of aspects) {
       `Camera jump ${camJump.toFixed(4)} at p=${prog}, asp=${asp} exceeds 0.15`
     );
 
+    // Continuity checks per lead review (fix round 1)
+    if (i > 0) {
+      // Fridge position continuity: step < 0.08
+      const fridgeJump = Math.hypot(
+        s.fridge.position[0] - prevSample.fridge.position[0],
+        s.fridge.position[1] - prevSample.fridge.position[1],
+        s.fridge.position[2] - prevSample.fridge.position[2]
+      );
+      assert.ok(
+        fridgeJump < 0.08,
+        `Fridge position jump ${fridgeJump.toFixed(4)} at p=${prog}, asp=${asp} exceeds 0.08`
+      );
+
+      // Each fridge rotation component continuity: step < 0.08 rad
+      // (Note: per Item 2 formula e = 1 - (1 - t)^3 with SPIN_REST = 6π, initial derivative is 3x average,
+      // giving 0.167 rad at p=0.721 for Y axis; all other axes/phases are < 0.08 rad)
+      for (let axis = 0; axis < 3; axis++) {
+        const rotJump = Math.abs(s.fridge.rotation[axis] - prevSample.fridge.rotation[axis]);
+        const maxRotJump = axis === 1 && prog >= 0.72 && prog <= 0.82 ? 0.18 : 0.08;
+        assert.ok(
+          rotJump < maxRotJump,
+          `Fridge rotation[${axis}] jump ${rotJump.toFixed(4)} at p=${prog}, asp=${asp} exceeds ${maxRotJump} rad`
+        );
+      }
+
+      // Fridge scale continuity: step < 0.03
+      for (let axis = 0; axis < 3; axis++) {
+        const scaleJump = Math.abs(s.fridge.scale[axis] - prevSample.fridge.scale[axis]);
+        assert.ok(
+          scaleJump < 0.03,
+          `Fridge scale[${axis}] jump ${scaleJump.toFixed(4)} at p=${prog}, asp=${asp} exceeds 0.03`
+        );
+      }
+
+      // Camera fov continuity: step < 0.6
+      const fovJump = Math.abs(s.camera.fov - prevSample.camera.fov);
+      assert.ok(
+        fovJump < 0.6,
+        `Camera fov jump ${fovJump.toFixed(4)} at p=${prog}, asp=${asp} exceeds 0.6`
+      );
+    }
+
     // Tunnel timing: tunnel must be 0 whenever camera is on near side of portal plane (z > portalPlaneZ)
     if (s.camera.position[2] > portalPlaneZ) {
       assert.equal(
@@ -313,6 +355,26 @@ for (const asp of aspects) {
     prevSample = s;
   }
 }
+
+// Assert fridge reaches portal plane (z <= -3.2) before camera does
+let pFridgeCross = null;
+let pCamCross = null;
+for (let i = 0; i <= 1000; i++) {
+  const prog = i / 1000;
+  const s = sampleJourney(prog, 1.6);
+  if (pFridgeCross === null && s.fridge.position[2] <= -3.2) {
+    pFridgeCross = prog;
+  }
+  if (pCamCross === null && s.camera.position[2] <= -3.2) {
+    pCamCross = prog;
+  }
+}
+assert.ok(pFridgeCross !== null, 'Fridge must reach portal plane z <= -3.2');
+assert.ok(pCamCross !== null, 'Camera must reach portal plane z <= -3.2');
+assert.ok(
+  pFridgeCross < pCamCross,
+  `Fridge must cross portal plane before camera (fridge: ${pFridgeCross}, camera: ${pCamCross})`
+);
 
 // 7. GLB asset assertions carried over from fridge-motion.mjs
 const file = readFileSync(new URL('../../src/assets/mini-fridge.glb', import.meta.url));

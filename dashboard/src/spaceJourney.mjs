@@ -138,7 +138,7 @@ export function sampleJourney(progress, aspect = 1.6) {
       zCam,
     ];
     camTarget = [0, 0.925, zCam - 6.0];
-    camFov = 65 + Math.sin(p * 20) * 3;
+    camFov = 65 + Math.sin(p * 20) * 3 * segment(p, 0.31, 0.36) * (1 - segment(p, 0.66, 0.72));
   } else if (p < 0.82) {
     const t = segment(p, 0.72, 0.82);
     camPos = lerpV([0, 0.925, -25.0], floatCamPos, t);
@@ -175,50 +175,62 @@ export function sampleJourney(progress, aspect = 1.6) {
   // 4. Fridge trajectory
   let fridgePos = [0, 0, 0];
   let fridgeRot = [0, 0, 0];
-  let fridgeScale = [1, 1, 1];
 
-  if (p < 0.26) {
-    const tPull = segment(p, 0.0, 0.26);
-    const tAcc = tPull * tPull;
-    // Fridge target in portal: [portalPos.x, portalPos.y - 0.925, portalPos.z]
-    fridgePos = [
-      lerp(0, portalPos[0], tAcc),
-      lerp(0, portalPos[1] - 0.925, tAcc),
-      lerp(0, portalPos[2], tAcc),
-    ];
-    fridgeRot = [
-      tPull * 0.35,
-      tPull * Math.PI * 1.2,
-      tPull * 0.25,
-    ];
-    const stretch = Math.sin(tPull * Math.PI) * 0.6;
-    fridgeScale = [1 - stretch * 0.45, 1 + stretch * 0.6, 1 - stretch * 0.45];
+  // Spaghettification stretch peaks at portal crossing (p = 0.24)
+  const st = segment(p, 0.10, 0.24) * (1 - segment(p, 0.24, 0.31));
+  const fridgeScale = [1 - 0.45 * st, 1 + 0.6 * st, 1 - 0.45 * st];
+
+  const ROT_Y_ENTRY = 1.2 * Math.PI;
+  const SPIN_END = ROT_Y_ENTRY + (0.72 - 0.29) * 22; // ~13.23 rad
+  const SPIN_REST = 6 * Math.PI; // ~18.85 rad
+
+  if (p < 0.29) {
+    if (p < 0.24) {
+      const tLin = clamp01(p / 0.24);
+      const tAcc = tLin * tLin;
+      fridgePos = [
+        lerp(0, -1.1, tAcc),
+        lerp(0, 0.375, tAcc),
+        lerp(0, -3.2, tAcc),
+      ];
+    } else {
+      const tLin2 = (p - 0.24) / (0.29 - 0.24);
+      fridgePos = [
+        -1.1,
+        0.375,
+        lerp(-3.2, -6.2, tLin2),
+      ];
+    }
+    const u = clamp01(p / 0.29);
+    fridgeRot = [0.35 * u, ROT_Y_ENTRY * u, 0.25 * u];
   } else if (p < 0.72) {
-    // In tunnel: fridge leads camera by ~3.0 units ahead along Z
     const tTunnel = (p - 0.29) / (0.72 - 0.29);
     const zCam = lerp(-3.2, -25.0, tTunnel);
     const zFridge = zCam - 3.0;
-    const tAlign = segment(p, 0.26, 0.32);
+    const tAlign = segment(p, 0.29, 0.35);
     fridgePos = [
-      lerp(portalPos[0], 0, tAlign),
-      lerp(portalPos[1] - 0.925, 0, tAlign),
+      lerp(-1.1, 0, tAlign),
+      lerp(0.375, 0, tAlign),
       zFridge,
     ];
-    const spinY = (p - 0.26) * 22;
-    const wobbleX = Math.sin(p * 38) * 0.35;
-    const wobbleZ = Math.cos(p * 32) * 0.35;
-    fridgeRot = [wobbleX, spinY, wobbleZ];
-    fridgeScale = [1, 1, 1];
+    const w = segment(p, 0.29, 0.34);
+    fridgeRot = [
+      lerp(0.35, Math.sin(p * 38) * 0.35, w),
+      ROT_Y_ENTRY + (p - 0.29) * 22,
+      lerp(0.25, Math.cos(p * 32) * 0.35, w),
+    ];
   } else if (p < 0.82) {
     const tSettle = segment(p, 0.72, 0.82);
     fridgePos = [0, 0, lerp(-28.0, -30.0, tSettle)];
-    const settleRotY = (1 - tSettle) * (0.8 * Math.sin((1 - tSettle) * Math.PI));
-    fridgeRot = [0, settleRotY, 0];
-    fridgeScale = [1, 1, 1];
+    const t = clamp01((p - 0.72) / 0.10);
+    const e = 1 - Math.pow(1 - t, 3);
+    const rotX = lerp(Math.sin(0.72 * 38) * 0.35, 0, e);
+    const rotY = lerp(SPIN_END, SPIN_REST, e);
+    const rotZ = lerp(Math.cos(0.72 * 32) * 0.35, 0, e);
+    fridgeRot = [rotX, rotY, rotZ];
   } else {
     fridgePos = [0, 0, -30.0];
-    fridgeRot = [0, 0, 0];
-    fridgeScale = [1, 1, 1];
+    fridgeRot = [0, SPIN_REST, 0];
   }
 
   // 5. Door opening & interior light & release
