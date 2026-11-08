@@ -9,6 +9,7 @@ from fridge_item.config import Config
 from fridge_item.gallery import ItemGallery
 from fridge_item.geometry import Box, DoorLine, Track
 from fridge_item.pipeline import ItemPipeline
+from fridge_item.session import Trip
 
 SCHEMA = json.loads(
     (Path(__file__).parents[3] / "contracts" / "item.event.schema.json").read_text()
@@ -275,6 +276,92 @@ def test_pipeline_two_takes_resolved_with_take_many(tmp_path: Path):
     # Hand 2 held bottle 20 (crop pixel 20 -> embedding [0.9, 0.1] -> matches id1)
     assert events[1]["item_id"] == id1
     assert gallery.items() == {}
+
+
+def test_two_embedded_takes_plus_one_cropless_take_in_close(tmp_path: Path):
+    line = DoorLine(p1=(0.0, 100.0), p2=(200.0, 100.0), inside=(100.0, 200.0))
+    cfg = Config(roi=(0, 0, 50, 50), line=line, door_on=100.0, door_off=50.0)
+    gallery = ItemGallery(tmp_path / "gallery.json")
+
+    id1 = gallery.add("bottle", embedding=np.array([1.0, 0.0]))
+    id2 = gallery.add("bottle", embedding=np.array([0.0, 1.0]))
+    id3 = gallery.add("apple")
+
+    def fake_embed(crop: np.ndarray) -> np.ndarray:
+        if crop[0, 0, 0] == 10:
+            return np.array([0.9, 0.1])
+        return np.array([0.1, 0.9])
+
+    pipeline = ItemPipeline(cfg=cfg, detect=lambda f: [], gallery=gallery, embed=fake_embed)
+
+    crop1 = np.full((10, 10, 3), 10, dtype=np.uint8)
+    crop2 = np.full((10, 10, 3), 20, dtype=np.uint8)
+    t1 = Trip(type="TAKE", item=Track(1, "item", Box(0, 0, 10, 10), 0.9, "bottle"), ts="t1", crop=crop1, confidence=0.9)
+    t2 = Trip(type="TAKE", item=Track(2, "item", Box(0, 0, 10, 10), 0.9, "apple"), ts="t2", crop=None, confidence=0.85)
+    t3 = Trip(type="TAKE", item=Track(3, "item", Box(0, 0, 10, 10), 0.9, "bottle"), ts="t3", crop=crop2, confidence=0.9)
+
+    events = pipeline._trips_to_events([t1, t2, t3])
+    assert len(events) == 3
+    assert events[0]["type"] == "TAKE"
+    assert events[0]["item_id"] == id1
+    assert events[1]["type"] == "TAKE"
+    assert events[1]["item_id"] == id3
+    assert events[2]["type"] == "TAKE"
+    assert events[2]["item_id"] == id2
+    assert gallery.items() == {}
+
+
+def test_put_then_take_in_one_call_matches_just_put_item(tmp_path: Path):
+    line = DoorLine(p1=(0.0, 100.0), p2=(200.0, 100.0), inside=(100.0, 200.0))
+    cfg = Config(roi=(0, 0, 50, 50), line=line, door_on=100.0, door_off=50.0)
+    gallery = ItemGallery(tmp_path / "gallery.json")
+
+    def fake_embed(crop: np.ndarray) -> np.ndarray:
+        return np.array([1.0, 0.0])
+
+    pipeline = ItemPipeline(cfg=cfg, detect=lambda f: [], gallery=gallery, embed=fake_embed)
+
+    crop = np.ones((10, 10, 3), dtype=np.uint8)
+    t_put = Trip(type="PUT", item=Track(1, "item", Box(0, 0, 10, 10), 0.9, "soda"), ts="t1", crop=crop, confidence=0.9)
+    t_take = Trip(type="TAKE", item=Track(2, "item", Box(0, 0, 10, 10), 0.9, "soda"), ts="t2", crop=crop, confidence=0.9)
+
+    events = pipeline._trips_to_events([t_put, t_take])
+    assert len(events) == 2
+    assert events[0]["type"] == "PUT"
+    assert events[1]["type"] == "TAKE"
+    assert events[1]["item_id"] == events[0]["item_id"]
+    assert gallery.items() == {}
+
+
+def test_take_put_take_ordering_resolves_put_first(tmp_path: Path):
+    line = DoorLine(p1=(0.0, 100.0), p2=(200.0, 100.0), inside=(100.0, 200.0))
+    cfg = Config(roi=(0, 0, 50, 50), line=line, door_on=100.0, door_off=50.0)
+    gallery = ItemGallery(tmp_path / "gallery.json")
+    id_a = gallery.add("snack", embedding=np.array([0.0, 1.0]))
+
+    def fake_embed(crop: np.ndarray) -> np.ndarray:
+        if crop[0, 0, 0] == 1:
+            return np.array([0.0, 1.0])
+        return np.array([1.0, 0.0])
+
+    pipeline = ItemPipeline(cfg=cfg, detect=lambda f: [], gallery=gallery, embed=fake_embed)
+
+    crop_a = np.full((10, 10, 3), 1, dtype=np.uint8)
+    crop_b = np.full((10, 10, 3), 2, dtype=np.uint8)
+
+    t1 = Trip(type="TAKE", item=Track(1, "item", Box(0, 0, 10, 10), 0.9, "snack"), ts="t1", crop=crop_a, confidence=0.9)
+    t2 = Trip(type="PUT", item=Track(2, "item", Box(0, 0, 10, 10), 0.9, "snack"), ts="t2", crop=crop_b, confidence=0.9)
+    t3 = Trip(type="TAKE", item=Track(3, "item", Box(0, 0, 10, 10), 0.9, "snack"), ts="t3", crop=crop_b, confidence=0.9)
+
+    events = pipeline._trips_to_events([t1, t2, t3])
+    assert len(events) == 3
+    assert events[0]["type"] == "TAKE"
+    assert events[0]["item_id"] == id_a
+    assert events[1]["type"] == "PUT"
+    assert events[2]["type"] == "TAKE"
+    assert events[2]["item_id"] == events[1]["item_id"]
+    assert gallery.items() == {}
+
 
 
 

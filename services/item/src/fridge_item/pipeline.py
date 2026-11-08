@@ -60,32 +60,47 @@ class ItemPipeline:
                 emb = self.embed(trip.crop)
             trip_embs.append(emb)
 
-        take_indices = [
+        # (a) First do every PUT's gallery.add in trip order
+        put_results: dict[int, tuple[str, float]] = {}
+        for i, (trip, emb) in enumerate(zip(trips, trip_embs)):
+            if trip.type == "PUT":
+                item_id = self.gallery.add(trip.item.label, emb)
+                put_results[i] = (item_id, trip.confidence)
+
+        # (b) Then resolve TAKEs: if 2 or more TAKEs have embeddings, resolve exactly those
+        # with one gallery.take_many call, and resolve every other TAKE with gallery.take
+        # in trip order.
+        take_results: dict[int, tuple[str, float]] = {}
+        embedded_take_indices = [
             i
             for i, (trip, emb) in enumerate(zip(trips, trip_embs))
             if trip.type == "TAKE" and emb is not None
         ]
-        take_results: dict[int, tuple[str, float]] = {}
 
+        if len(embedded_take_indices) >= 2:
+            queries = [
+                (trips[idx].item.label, trip_embs[idx])  # type: ignore[arg-type]
+                for idx in embedded_take_indices
+            ]
+            matches = self.gallery.take_many(queries)
+            for idx, match in zip(embedded_take_indices, matches):
+                take_results[idx] = match
+
+            for i, (trip, emb) in enumerate(zip(trips, trip_embs)):
+                if trip.type == "TAKE" and i not in take_results:
+                    take_results[i] = self.gallery.take(trip.item.label, emb)
+        else:
+            for i, (trip, emb) in enumerate(zip(trips, trip_embs)):
+                if trip.type == "TAKE":
+                    take_results[i] = self.gallery.take(trip.item.label, emb)
+
+        # (c) Emit the events in the original trip order. Keep the single shared trip->event path.
         events: list[dict] = []
-        for i, (trip, emb) in enumerate(zip(trips, trip_embs)):
+        for i, trip in enumerate(trips):
             if trip.type == "PUT":
-                item_id = self.gallery.add(trip.item.label, emb)
-                confidence = trip.confidence
+                item_id, confidence = put_results[i]
             elif trip.type == "TAKE":
-                if len(take_indices) >= 2:
-                    if not take_results:
-                        queries = [
-                            (trips[idx].item.label, trip_embs[idx])  # type: ignore[arg-type]
-                            for idx in take_indices
-                        ]
-                        matches = self.gallery.take_many(queries)
-                        for idx, match in zip(take_indices, matches):
-                            take_results[idx] = match
-                    item_id, score = take_results[i]
-                else:
-                    item_id, score = self.gallery.take(trip.item.label, emb)
-
+                item_id, score = take_results[i]
                 if item_id == "unknown":
                     confidence = 0.1
                 else:
