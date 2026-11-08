@@ -19,3 +19,17 @@ def test_contract_rejects_broken_event():
     del bad["ts"]
     with pytest.raises(ValidationError):
         Draft202012Validator(SCHEMA).validate(bad)
+
+
+def test_null_identity_and_preserved_evidence_timestamp():
+    ts = '2026-11-08T09:15:02.120Z'
+    event = person_seen(0, None, 0., ts=ts)
+    Draft202012Validator(SCHEMA).validate(event)
+    assert event['ts'] == ts
+    assert set(event) == set(SCHEMA['required'])
+
+
+@pytest.mark.parametrize('confidence', [-.1, 1.1, float('inf'), -float('inf')])
+def test_contract_rejects_invalid_confidence(confidence):
+    with pytest.raises(ValidationError):
+        Draft202012Validator(SCHEMA).validate(person_seen(0, 'a', confidence))
