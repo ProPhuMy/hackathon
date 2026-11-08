@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FridgeCheck · who took my food?</title>
+  <meta name="description" content="FridgeCheck uses two phone cameras to record who put what into a shared fridge and who took it out, and raises an alert when someone takes food that isn't theirs." />
+  <meta property="og:title" content="FridgeCheck · who took my food?" />
+  <meta property="og:description" content="Two phones, nine neural networks, one fridge. Know who put it in, who took it out, and whether it was theirs." />
+  <meta property="og:image" content="assets/og-image.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧊</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <canvas id="stars" aria-hidden="true"></canvas>
+
+  <header class="nav">
+    <a class="brand pixel" href="#top">FRIDGECHECK</a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#demo">Demo</a>
+      <a href="#problem">Problem</a>
+      <a href="#how">How it works</a>
+      <a href="#stack">Stack</a>
+      <a href="#team">Team</a>
+    </nav>
+    <a class="btn btn-ghost" href="https://github.com/ProPhuMy/hackathon" target="_blank" rel="noopener">GitHub ↗</a>
+  </header>
+
+  <main id="top">
+    <!-- Hero -->
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Shared-fridge accountability</p>
+        <h1 class="pixel title">FRIDGECHECK</h1>
+        <p class="tagline">Who put it in. Who took it out. <span class="hl">Whether it was theirs.</span></p>
+        <p class="lead">
+          FridgeCheck watches a shared fridge with two ordinary phones: one recognizes the people, the other sees the food.
+          When someone takes food that isn't theirs, it raises an alert within seconds, with evidence instead of guesses.
+        </p>
+        <div class="cta">
+          <a class="btn btn-primary" href="#demo">▶ Watch the 3-minute demo</a>
+          <a class="btn btn-ghost" href="https://github.com/ProPhuMy/hackathon" target="_blank" rel="noopener">View the code on GitHub</a>
+        </div>
+      </div>
+      <div class="hero-art" aria-hidden="true">
+        <div class="wormhole"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="fridge-float">
+          <img src="assets/fridge.png" alt="" width="400" height="400" />
+          <span class="eyes">👀</span>
+        </div>
+        <span class="drift d1">🥛</span><span class="drift d2">🍎</span><span class="drift d3">🧃</span><span class="drift d4">🍕</span>
+      </div>
+    </section>
+
+    <!-- Demo video -->
+    <section id="demo" class="section reveal">
+      <h2 class="pixel h2">THE DEMO</h2>
+      <p class="section-lead">Three minutes: the problem, why it matters, and how FridgeCheck solves it.</p>
+      <div class="video">
+        <iframe
+          src="https://www.youtube-nocookie.com/embed/pDQ0bsB9lUE?rel=0"
+          title="FridgeCheck demo video"
+          loading="lazy"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerpolicy="strict-origin-when-cross-origin"
+          allowfullscreen></iframe>
+      </div>
+      <p class="small center"><a href="https://youtu.be/pDQ0bsB9lUE" target="_blank" rel="noopener">Open on YouTube ↗</a></p>
+    </section>
+
+    <!-- Problem / why / how -->
+    <section id="problem" class="section">
+      <div class="cards">
+        <article class="card reveal" style="--accent: var(--pink)">
+          <p class="card-tag pixel">THE PROBLEM</p>
+          <h3>Food disappears.</h3>
+          <p>In dorms, offices and shared apartments, labels get ignored and nobody saw a thing. The only evidence is an empty shelf, and the only tool is a passive-aggressive sticky note.</p>
+        </article>
+        <article class="card reveal" style="--accent: var(--note)">
+          <p class="card-tag pixel">WHY IT MATTERS</p>
+          <h3>Money, waste, trust.</h3>
+          <p>Missing food costs real money, ends up as waste, and quietly breaks trust between people who share a space. Without evidence, every conversation becomes an accusation.</p>
+        </article>
+        <article class="card reveal" style="--accent: var(--ok)">
+          <p class="card-tag pixel">THE SOLUTION</p>
+          <h3>Facts, not guesses.</h3>
+          <p>FridgeCheck records who put what in and who took what out, automatically. If you take someone else's food, it notices in seconds and shows it on a live dashboard.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- How it works -->
+    <section id="how" class="section">
+      <h2 class="pixel h2 reveal">HOW IT WORKS</h2>
+      <p class="section-lead reveal">Two cameras, two recognition services, one event stream, one judge.</p>
+      <ol class="flow">
+        <li class="step reveal" style="--accent: var(--cyan)">
+          <span class="step-n pixel">1</span>
+          <h3>Phone 1 → Person service</h3>
+          <p>Faces the people at the fridge. Detects faces and recognizes them with ArcFace on the GPU in about 20 ms per frame. Strangers stay anonymous, and it would rather say nothing than say the wrong name.</p>
+        </li>
+        <li class="step reveal" style="--accent: var(--violet)">
+          <span class="step-n pixel">2</span>
+          <h3>Phone 2 → Item service</h3>
+          <p>Sits on top of the fridge, watching the door. YOLOE spots hands and items; DINOv2 remembers each item, so the bottle that comes out is matched to the bottle that went in.</p>
+        </li>
+        <li class="step reveal" style="--accent: var(--pink)">
+          <span class="step-n pixel">3</span>
+          <h3>Redpanda event stream</h3>
+          <p>Both services publish small, schema-checked events (<code>person.seen</code>, <code>item.event</code>) to a Kafka-compatible stream.</p>
+        </li>
+        <li class="step reveal" style="--accent: var(--ok)">
+          <span class="step-n pixel">4</span>
+          <h3>Backend matcher</h3>
+          <p>A probabilistic matcher pairs every item event with the face seen at that moment (within about 1.5 s), then decides: <b>ok</b>, or <b>wrong owner</b>.</p>
+        </li>
+        <li class="step reveal" style="--accent: var(--note)">
+          <span class="step-n pixel">5</span>
+          <h3>Dashboard, alerts, AI</h3>
+          <p>A live dashboard shows the fridge, its inventory and alerts. An MCP server lets an AI assistant answer “who took my water?”.</p>
+        </li>
+      </ol>
+
+      <div class="log reveal" aria-label="Example of what FridgeCheck records">
+        <p class="log-title pixel">EVENT LOG</p>
+        <div class="log-row ok"><span class="pixel">PUT</span><span>Bottle of water</span><span>Alex</span><span class="status pixel">OK</span></div>
+        <div class="log-row bad"><span class="pixel">TAKE</span><span>The same bottle</span><span>Sam</span><span class="status pixel">WRONG OWNER</span></div>
+        <p class="small">Illustrative example of one put and one take.</p>
+      </div>
+    </section>
+
+    <!-- Over-engineered -->
+    <section id="stack" class="section">
+      <h2 class="pixel h2 reveal">OVER-ENGINEERED?</h2>
+      <p class="section-lead reveal">Could a sticky note have solved this? Probably. Instead we built:</p>
+      <div class="counters reveal">
+        <div><span class="pixel count" data-to="9">0</span><span>neural networks</span></div>
+        <div><span class="pixel count" data-to="4">0</span><span>services</span></div>
+        <div><span class="pixel count" data-to="3">0</span><span>event topics</span></div>
+        <div><span class="pixel count gold" data-to="1">0</span><span>fridge</span></div>
+      </div>
+      <ul class="badges reveal">
+        <li>SCRFD</li><li>ArcFace</li><li>AdaFace</li><li>MagFace</li><li>YOLO5Face</li><li>Conformal prediction</li>
+        <li>Kalman face tracker</li><li>YOLOE-26l</li><li>DINOv2</li><li>SAM 2</li><li>Grounding DINO</li><li>ByteTrack</li>
+        <li>Redpanda (Kafka API)</li><li>JPDA matcher</li><li>Hungarian assignment</li><li>JSON Schema contracts</li>
+        <li>Transactional outbox</li><li>PostgreSQL</li><li>Server-Sent Events</li><li>MCP server</li><li>CUDA + ONNX Runtime</li>
+        <li>Kubernetes (k3d)</li><li>SSH tunnel to a GPU</li><li>React + Three.js</li>
+      </ul>
+      <p class="small center reveal">The live demo runs SCRFD + ArcFace and YOLOE + DINOv2; the face ensemble, SAM 2 and Grounding DINO are implemented and tested in the repo.</p>
+    </section>
+
+    <!-- Results -->
+    <section class="section">
+      <h2 class="pixel h2 reveal">TESTED FOR REAL</h2>
+      <div class="stats">
+        <div class="stat reveal"><span class="pixel big ok-c"><span class="count" data-to="20">0</span>/20</span><p>live face checks correct, strangers flagged as unknown</p></div>
+        <div class="stat reveal"><span class="pixel big cyan-c">0</span><p>false item alarms in our fridge tests</p></div>
+        <div class="stat reveal"><span class="pixel big violet-c"><span class="count" data-to="20">0</span> MS</span><p>face recognition per frame on a laptop GPU</p></div>
+      </div>
+      <p class="small center reveal">Small hackathon tests: 2 enrolled people plus a stranger on a live camera, 3 labelled fridge clips, real phones.</p>
+    </section>
+
+    <!-- Team -->
+    <section id="team" class="section">
+      <h2 class="pixel h2 reveal">MISSION CREW</h2>
+      <div class="team">
+        <div class="member reveal"><span class="avatar">Đ</span><h3>Đăng</h3><p>Item + person recognition</p></div>
+        <div class="member reveal"><span class="avatar">V</span><h3>Việt</h3><p>Person recognition</p></div>
+        <div class="member reveal"><span class="avatar">P</span><h3>Phong</h3><p>Backend, matching + MCP</p></div>
+        <div class="member reveal"><span class="avatar">K</span><h3>Khang</h3><p>Dashboard, infra + video</p></div>
+      </div>
+    </section>
+
+    <section class="section final reveal">
+      <h2 class="pixel h2">YOUR FOOD. ACCOUNTED FOR.</h2>
+      <div class="cta center-row">
+        <a class="btn btn-primary" href="https://youtu.be/pDQ0bsB9lUE" target="_blank" rel="noopener">▶ Watch on YouTube</a>
+        <a class="btn btn-ghost" href="https://github.com/ProPhuMy/hackathon" target="_blank" rel="noopener">Star it on GitHub</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span class="pixel">FRIDGECHECK</span>
+    <span>Made with nine neural networks and one fridge.</span>
+    <span><a href="https://github.com/ProPhuMy/hackathon" target="_blank" rel="noopener">GitHub</a> · <a href="https://youtu.be/pDQ0bsB9lUE" target="_blank" rel="noopener">YouTube</a></span>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>
