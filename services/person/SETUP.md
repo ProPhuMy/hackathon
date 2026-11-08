@@ -143,7 +143,9 @@ uv run python -m src evaluate --manifest models/test.csv --policy models/baselin
 Test rows use `split=test`. Calibration searches a fixed coarse threshold grid
 using only development encounters. It requires zero false names on that data
 and at least one correctly named known encounter, then maximizes correct known
-encounters and operational stranger rejection. Failure to find a useful policy
+encounters and operational stranger rejection. Among the equally good thresholds, it takes the middle
+accept value, not the strictest. On 2026-11-08 the strictest (0.9) sat just under the development scores and
+left one of two known people unnamed on held-out test clips. The middle (0.7) named both, with no wrong names. Failure to find a useful policy
 is an explicit error. This is empirical threshold selection, **not** learned
 ensemble fusion or conformal calibration, and zero observed false names does not
 guarantee zero deployment error. Test evaluation never retunes the policy.

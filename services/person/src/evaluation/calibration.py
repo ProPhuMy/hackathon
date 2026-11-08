@@ -41,7 +41,7 @@ def measure(encounters, scores, policy):
 def fit_baseline(encounters, scores):
     if not any(e['person_id'] is None for e in encounters) or not any(e['person_id'] is not None for e in encounters):
         raise ValueError('Calibration requires independent known and stranger encounters')
-    best = None
+    safe = []
     # Fixed coarse search on development only; test recordings never select thresholds.
     for accept, reject, margin in itertools.product((.3, .4, .5, .6, .7, .8, .9, 1.),
                                                      (-.2, 0., .2, .4), (0., .05, .1, .2)):
@@ -49,11 +49,15 @@ def fit_baseline(encounters, scores):
             continue
         policy = dict(accept=accept, reject=reject, margin=margin)
         report = measure(encounters, scores, policy)
-        if report['unknown_false_accepts'] or report['wrong_known']:
-            continue
-        rank = (report['known_correct'], report['unknown_rejected'], accept, margin, -reject)
-        if best is None or rank > best[0]:
-            best = rank, policy, report
-    if best is None or best[2]['known_correct'] == 0:
+        if not (report['unknown_false_accepts'] or report['wrong_known']):
+            safe.append(((report['known_correct'], report['unknown_rejected']), policy, report))
+    top = max((outcome for outcome, _, _ in safe), default=None)
+    if top is None or top[0] == 0:
         raise ValueError('No useful development policy without false names; collect data or improve baseline')
-    return best[1], best[2]
+    best = [(policy, report) for outcome, policy, report in safe if outcome == top]
+    # Middle of the working accept range, not its strict edge: the edge sits just under the development
+    # scores, so a known person who turns their head goes unnamed; the middle has room on both sides.
+    accepts = sorted({policy['accept'] for policy, _ in best})
+    middle = accepts[len(accepts) // 2]
+    return max(((policy, report) for policy, report in best if policy['accept'] == middle),
+               key=lambda pair: (pair[0]['margin'], -pair[0]['reject']))

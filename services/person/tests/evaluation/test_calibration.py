@@ -31,3 +31,16 @@ def test_brief_wrong_identity_counts_as_failure():
     report = measure(data, scores, dict(accept=.8, reject=.1, margin=.1))
     assert report['wrong_known'] == 1
     assert report['known_correct'] == 0
+
+
+def test_threshold_is_the_middle_of_the_working_range_not_its_edge():
+    # Known people score .85, a stranger .35: accept .4 through .8 all name both and reject the stranger.
+    # The strictest working value (.8) sits right under the known scores, so a small drop leaves people
+    # unnamed; the middle (.6) has the most room on both sides.
+    # Unit vectors (evidence averages unit vectors), so these are the cosine scores themselves.
+    k = (1 - .85 ** 2) ** .5
+    data = [encounter('a', [.85, k]), encounter('b', [k, .85]), encounter(None, [.35, -(1 - .35 ** 2) ** .5])]
+    policy, report = fit_baseline(data, scores)
+    assert policy['accept'] == .6
+    assert report['known_correct'] == 2 and report['unknown_rejected'] == 1
+    assert report['wrong_known'] == report['unknown_false_accepts'] == 0
