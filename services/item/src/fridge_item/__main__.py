@@ -181,20 +181,23 @@ def run_command(
     except KeyboardInterrupt:
         pass
     finally:
-        flushed_events = pipeline.close()
-        for ev in flushed_events:
-            print(json.dumps(ev, ensure_ascii=False), flush=True)
+        try:
+            flushed_events = pipeline.close()
+            for ev in flushed_events:
+                print(json.dumps(ev, ensure_ascii=False), flush=True)
+                if producer is not None:
+                    producer.produce(
+                        "item.event",
+                        key=ev["event_id"],
+                        value=json.dumps(ev, ensure_ascii=False),
+                    )
+                    producer.poll(0)
+        finally:
             if producer is not None:
-                producer.produce(
-                    "item.event",
-                    key=ev["event_id"],
-                    value=json.dumps(ev, ensure_ascii=False),
-                )
-                producer.poll(0)
-        if producer is not None:
-            producer.flush()
-        if writer is not None:
-            writer.release()
+                producer.flush()
+            if writer is not None:
+                writer.release()
+
 
 
 

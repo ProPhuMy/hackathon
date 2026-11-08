@@ -471,3 +471,58 @@ def test_cli_run_command_flushes_on_shutdown(tmp_path: Path, monkeypatch, capsys
     Draft202012Validator(SCHEMA).validate(ev)
 
 
+def test_shutdown_cleanup_on_flush_error(tmp_path: Path, monkeypatch):
+    import sys
+    from unittest.mock import MagicMock
+    from fridge_item.__main__ import run_command
+    from fridge_item.config import Config, save
+    from fridge_item.events import item_event
+
+    cfg_file = tmp_path / "cfg.json"
+    line = DoorLine(p1=(0.0, 100.0), p2=(200.0, 100.0), inside=(100.0, 200.0))
+    save(Config(roi=(0, 0, 50, 50), line=line, door_on=100.0, door_off=50.0), cfg_file)
+
+    frame = np.full((100, 100, 3), 10, dtype=np.uint8)
+    monkeypatch.setattr("fridge_item.detect.Detector", MagicMock())
+    monkeypatch.setattr(
+        "fridge_item.__main__.iter_frames",
+        lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
+    )
+
+    flushed_ev = item_event("PUT", "item_err", "coke", 0.9, ts="2026-11-07T20:00:02.000Z")
+    monkeypatch.setattr(
+        "fridge_item.pipeline.ItemPipeline.process",
+        lambda self, f, ts: [],
+    )
+    monkeypatch.setattr(
+        "fridge_item.pipeline.ItemPipeline.close",
+        lambda self: [flushed_ev],
+    )
+
+    mock_producer_instance = MagicMock()
+    mock_producer_instance.produce.side_effect = RuntimeError("Kafka buffer full")
+    mock_producer_cls = MagicMock(return_value=mock_producer_instance)
+
+    mock_kafka_mod = MagicMock()
+    mock_kafka_mod.Producer = mock_producer_cls
+    monkeypatch.setitem(sys.modules, "confluent_kafka", mock_kafka_mod)
+
+    mock_writer = MagicMock()
+    monkeypatch.setattr("cv2.VideoWriter", MagicMock(return_value=mock_writer))
+
+    out_video = tmp_path / "out.mp4"
+    with pytest.raises(RuntimeError, match="Kafka buffer full"):
+        run_command(
+            source="dummy_src",
+            config_path=str(cfg_file),
+            gallery_path=str(tmp_path / "gallery.json"),
+            broker="localhost:19092",
+            dry_run=False,
+            debug_video=str(out_video),
+        )
+
+    mock_producer_instance.flush.assert_called_once()
+    mock_writer.release.assert_called_once()
+
+
+
