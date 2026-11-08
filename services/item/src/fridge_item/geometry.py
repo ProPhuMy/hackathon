@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import math
 from typing import Literal
 
 Point = tuple[float, float]
@@ -37,6 +38,9 @@ class Track:
     conf: float
     label: str
 
+    def area(self) -> float:
+        return self.box.area()
+
 
 @dataclass(frozen=True)
 class DoorLine:
@@ -44,3 +48,36 @@ class DoorLine:
     p2: Point
     inside: Point
     margin: float = 15.0
+
+    def side(self, pt: Point) -> int:
+        dx = self.p2[0] - self.p1[0]
+        dy = self.p2[1] - self.p1[1]
+        line_len = math.hypot(dx, dy)
+        if line_len == 0.0:
+            return 0
+        cross_pt = dx * (pt[1] - self.p1[1]) - dy * (pt[0] - self.p1[0])
+        dist = abs(cross_pt) / line_len
+        if dist < self.margin:
+            return 0
+        cross_inside = dx * (self.inside[1] - self.p1[1]) - dy * (self.inside[0] - self.p1[0])
+        if cross_inside == 0.0:
+            return 0
+        if (cross_pt > 0 and cross_inside > 0) or (cross_pt < 0 and cross_inside < 0):
+            return 1
+        return -1
+
+
+def held_item(
+    hand: Track, items: list[Track], min_overlap: float = 0.15
+) -> Track | None:
+    best_item: Track | None = None
+    best_overlap = -1.0
+    for item in items:
+        iarea = item.box.area()
+        if iarea <= 0.0:
+            continue
+        overlap = hand.box.intersection(item.box) / iarea
+        if overlap >= min_overlap and overlap > best_overlap:
+            best_overlap = overlap
+            best_item = item
+    return best_item
