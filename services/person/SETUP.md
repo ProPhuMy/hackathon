@@ -157,3 +157,21 @@ shutdown), with 78 usable single-face frames, no stale frames or reconnects,
 median inference 36.82 ms and p95 72.04 ms. These measure this scene and CPU host
 only, not recognition accuracy, camera exposure-to-event latency, or performance
 with the item pipeline running. All 43 automated tests passed.
+
+## Enrollment and data-collection outcome
+
+After explicit participant consent, local webcam enrollment completed for one
+participant. The gallery's normalized 512-D template and private file permissions
+were verified; the gallery remains ignored by Git. No enrollment images were
+retained. This supersedes the earlier note that no real enrollment had run.
+
+With explicit permission to retain evaluation video, two development-capture
+attempts were made. The first was rejected when multiple faces were detected;
+its partial clip was discarded. The second timed out waiting for an empty-view
+boundary followed by a single-person return. No completed development clip was
+retained, and no recognition threshold or accuracy result was fabricated.
+
+Next physical test: keep the camera view empty for two seconds, then let only
+the enrolled participant enter and remain visible for eight seconds. Independent
+development and test encounters plus a different consenting stranger are still
+needed. Camera processes have exited after these attempts.
