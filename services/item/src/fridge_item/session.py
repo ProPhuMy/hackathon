@@ -60,7 +60,11 @@ class DoorSession:
         self.hand_crops: dict[int, tuple[int, float, np.ndarray | None]] = {}
 
     def update(
-        self, tracks: list[Track], ts: str, frame: np.ndarray | None = None
+        self,
+        tracks: list[Track],
+        ts: str,
+        frame: np.ndarray | None = None,
+        masks: dict[int, np.ndarray] | None = None,
     ) -> list[Trip]:
         hands = [t for t in tracks if t.kind == "hand"]
         items = [t for t in tracks if t.kind == "item"]
@@ -68,7 +72,7 @@ class DoorSession:
 
         # Update best crop per hand ID for the item currently held
         for hand in hands:
-            held = held_item(hand, items)
+            held = held_item(hand, items, masks=masks)
             if held is None:
                 self.hand_crops.pop(hand.id, None)
             else:
@@ -115,7 +119,7 @@ class DoorSession:
             else:
                 continue
 
-            held = held_item(hand, items)
+            held = held_item(hand, items, masks=masks)
             crop: np.ndarray | None = None
             if held is not None and hand.id in self.hand_crops and self.hand_crops[hand.id][0] == held.id:
                 best = self.hand_crops[hand.id][2]

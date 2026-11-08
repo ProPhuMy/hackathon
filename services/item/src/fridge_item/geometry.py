@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import math
 from typing import Literal
+import numpy as np
 
 Point = tuple[float, float]
 
@@ -68,15 +69,36 @@ class DoorLine:
 
 
 def held_item(
-    hand: Track, items: list[Track], min_overlap: float = 0.15
+    hand: Track,
+    items: list[Track],
+    min_overlap: float = 0.15,
+    masks: dict[int, np.ndarray] | None = None,
 ) -> Track | None:
     best_item: Track | None = None
     best_overlap = -1.0
     for item in items:
-        iarea = item.box.area()
-        if iarea <= 0.0:
-            continue
-        overlap = hand.box.intersection(item.box) / iarea
+        if masks is not None and item.id in masks and masks[item.id] is not None:
+            mask = masks[item.id]
+            total_pixels = int(np.count_nonzero(mask))
+            if total_pixels <= 0:
+                overlap = 0.0
+            else:
+                h, w = mask.shape[:2]
+                hx1 = max(0, min(w, int(round(hand.box.x1))))
+                hy1 = max(0, min(h, int(round(hand.box.y1))))
+                hx2 = max(0, min(w, int(round(hand.box.x2))))
+                hy2 = max(0, min(h, int(round(hand.box.y2))))
+                if hx2 <= hx1 or hy2 <= hy1:
+                    overlap = 0.0
+                else:
+                    hand_pixels = int(np.count_nonzero(mask[hy1:hy2, hx1:hx2]))
+                    overlap = hand_pixels / total_pixels
+        else:
+            iarea = item.box.area()
+            if iarea <= 0.0:
+                continue
+            overlap = hand.box.intersection(item.box) / iarea
+
         if overlap >= min_overlap and overlap > best_overlap:
             best_overlap = overlap
             best_item = item

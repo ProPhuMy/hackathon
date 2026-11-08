@@ -18,11 +18,13 @@ class ItemPipeline:
         detect: Callable[[np.ndarray], list[Track]],
         gallery: ItemGallery,
         embed: Callable[[np.ndarray], np.ndarray] | None = None,
+        segment: Callable[[np.ndarray, list[Track]], dict[int, np.ndarray]] | None = None,
     ) -> None:
         self.cfg = cfg
         self.detect = detect
         self.gallery = gallery
         self.embed = embed
+        self.segment = segment
         self.door_detector = DoorDetector(roi=cfg.roi, on=cfg.door_on, off=cfg.door_off)
         self.session: DoorSession | None = None
         self.tracks: list[Track] = []
@@ -40,7 +42,13 @@ class ItemPipeline:
                 self.session = DoorSession(self.cfg.line)
             tracks = self.detect(frame)
             self.tracks = tracks
-            trips = self.session.update(tracks, ts, frame)
+            item_tracks = [t for t in tracks if t.kind == "item"]
+            masks = (
+                self.segment(frame, item_tracks)
+                if self.segment is not None
+                else None
+            )
+            trips = self.session.update(tracks, ts, frame, masks=masks)
             return self._trips_to_events(trips)
 
     def close(self) -> list[dict]:

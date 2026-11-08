@@ -377,6 +377,7 @@ def test_cli_parse_args():
     assert args.dry_run is True
     assert args.debug_video is None
     assert args.embed is False
+    assert args.holding == "box"
 
     args2 = parse_args(
         [
@@ -392,6 +393,8 @@ def test_cli_parse_args():
             "--debug-video",
             "out.mp4",
             "--embed",
+            "--holding",
+            "mask",
         ]
     )
     assert args2.source == "http://192.168.1.10:8080/video"
@@ -401,10 +404,66 @@ def test_cli_parse_args():
     assert args2.dry_run is False
     assert args2.debug_video == "out.mp4"
     assert args2.embed is True
+    assert args2.holding == "mask"
 
     args_eval = parse_args(["evaluate", "--embed"])
     assert args_eval.subcommand == "evaluate"
     assert args_eval.embed is True
+    assert args_eval.holding == "box"
+
+    args_eval2 = parse_args(["evaluate", "--holding", "mask"])
+    assert args_eval2.subcommand == "evaluate"
+    assert args_eval2.holding == "mask"
+
+
+def test_cli_run_command_with_holding_mask(tmp_path: Path, monkeypatch, capsys):
+    from fridge_item.__main__ import run_command
+    from fridge_item.config import Config, save
+    from fridge_item.events import item_event
+
+    cfg_file = tmp_path / "cfg.json"
+    line = DoorLine(p1=(0.0, 100.0), p2=(200.0, 100.0), inside=(100.0, 200.0))
+    save(Config(roi=(0, 0, 50, 50), line=line, door_on=100.0, door_off=50.0), cfg_file)
+
+    test_ev = item_event("PUT", "item_123", "bottle", 0.9, ts="2026-11-07T20:00:01.000Z")
+    frame = np.full((300, 300, 3), 10, dtype=np.uint8)
+
+    mock_segmenter_instance = MagicMock()
+    mock_segmenter_cls = MagicMock(return_value=mock_segmenter_instance)
+    monkeypatch.setattr("fridge_item.segment.Segmenter", mock_segmenter_cls)
+
+    pipelines_built = []
+    from fridge_item.pipeline import ItemPipeline
+    original_init = ItemPipeline.__init__
+
+    def spy_init(self, *args, **kwargs):
+        original_init(self, *args, **kwargs)
+        pipelines_built.append(self)
+
+    monkeypatch.setattr("fridge_item.pipeline.ItemPipeline.__init__", spy_init)
+
+    monkeypatch.setattr("fridge_item.detect.Detector", MagicMock())
+    monkeypatch.setattr(
+        "fridge_item.__main__.iter_frames",
+        lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
+    )
+    monkeypatch.setattr(
+        "fridge_item.pipeline.ItemPipeline.process",
+        lambda self, f, ts: [test_ev],
+    )
+
+    run_command(
+        source="dummy_src",
+        config_path=str(cfg_file),
+        gallery_path=str(tmp_path / "gallery.json"),
+        dry_run=True,
+        holding="mask",
+    )
+
+    mock_segmenter_cls.assert_called_once()
+    assert len(pipelines_built) == 1
+    assert pipelines_built[0].segment is mock_segmenter_instance
+
 
 
 def test_cli_run_command_with_embed(tmp_path: Path, monkeypatch, capsys):
@@ -620,6 +679,48 @@ def test_close_with_no_open_session(tmp_path: Path):
     pipeline = ItemPipeline(cfg=cfg, detect=ScriptedDetector([]), gallery=gallery)
 
     assert pipeline.close() == []
+
+
+def test_pipeline_segment_called_only_when_door_open(tmp_path: Path):
+    line = DoorLine(p1=(0.0, 100.0), p2=(200.0, 100.0), inside=(100.0, 200.0))
+    cfg = Config(roi=(0, 0, 50, 50), line=line, door_on=100.0, door_off=50.0)
+    gallery = ItemGallery(tmp_path / "gallery.json")
+
+    hand_tr = hand(1, 100.0, 50.0)
+    item_tr = item(10, 100.0, 50.0, label="milk")
+    script = [
+        [hand_tr, item_tr],
+    ]
+    detector = ScriptedDetector(script)
+
+    fake_mask = np.zeros((300, 300), dtype=bool)
+    mock_segment = MagicMock(return_value={10: fake_mask})
+
+    pipeline = ItemPipeline(
+        cfg=cfg,
+        detect=detector,
+        gallery=gallery,
+        segment=mock_segment,
+    )
+
+    dark_frame = np.full((300, 300, 3), 10, dtype=np.uint8)
+    bright_frame = np.full((300, 300, 3), 200, dtype=np.uint8)
+
+    # 1. Door closed -> segment not called
+    pipeline.process(dark_frame, ts="2026-11-07T20:00:00.000Z")
+    assert mock_segment.call_count == 0
+
+    # 2. Door open -> segment called once with frame and ONLY item tracks
+    pipeline.process(bright_frame, ts="2026-11-07T20:00:01.000Z")
+    assert mock_segment.call_count == 1
+    call_args, _ = mock_segment.call_args
+    assert np.array_equal(call_args[0], bright_frame)
+    assert call_args[1] == [item_tr]
+
+    # 3. Door closed -> segment not called again
+    pipeline.process(dark_frame, ts="2026-11-07T20:00:02.000Z")
+    assert mock_segment.call_count == 1
+
 
 
 def test_cli_run_command_flushes_on_shutdown(tmp_path: Path, monkeypatch, capsys):

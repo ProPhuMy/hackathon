@@ -84,6 +84,7 @@ def run_command(
     dry_run: bool = False,
     debug_video: str | None = None,
     embed: bool = False,
+    holding: str = "box",
 ) -> None:
     """Run item recognition pipeline, printing events, publishing to Kafka, and tracking latency."""
     from fridge_item.config import load
@@ -102,6 +103,12 @@ def run_command(
 
         embedder = Embedder()
 
+    segmenter = None
+    if holding == "mask":
+        from fridge_item.segment import Segmenter
+
+        segmenter = Segmenter()
+
     producer = None
     if not dry_run:
         from confluent_kafka import Producer
@@ -118,7 +125,11 @@ def run_command(
         return tracks
 
     pipeline = ItemPipeline(
-        cfg=cfg, detect=timed_detect, gallery=gallery, embed=embedder
+        cfg=cfg,
+        detect=timed_detect,
+        gallery=gallery,
+        embed=embedder,
+        segment=segmenter,
     )
 
     writer: cv2.VideoWriter | None = None
@@ -214,6 +225,7 @@ def evaluate_command(
     config_path: str = "config.json",
     detector_factory=None,
     embed: bool = False,
+    holding: str = "box",
 ) -> dict[str, int]:
     """Evaluate item recognition pipeline against labeled clips."""
     from fridge_item.evaluate import evaluate_command as run_evaluate
@@ -224,6 +236,7 @@ def evaluate_command(
         config_path=config_path,
         detector_factory=detector_factory,
         embed=embed,
+        holding=holding,
     )
 
 
@@ -294,6 +307,12 @@ def parse_args(args: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Use visual embeddings and Hungarian matching",
     )
+    run_parser.add_argument(
+        "--holding",
+        choices=["box", "mask"],
+        default="box",
+        help="Holding detection method: box overlap or SAM 2 mask overlap (default: box)",
+    )
 
     evaluate_parser = subparsers.add_parser(
         "evaluate", help="Evaluate item recognition pipeline against labeled clips"
@@ -318,6 +337,12 @@ def parse_args(args: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Use visual embeddings and Hungarian matching",
     )
+    evaluate_parser.add_argument(
+        "--holding",
+        choices=["box", "mask"],
+        default="box",
+        help="Holding detection method: box overlap or SAM 2 mask overlap (default: box)",
+    )
 
     return parser.parse_args(args)
 
@@ -339,6 +364,7 @@ def main(args: list[str] | None = None) -> None:
             dry_run=parsed.dry_run,
             debug_video=parsed.debug_video,
             embed=parsed.embed,
+            holding=parsed.holding,
         )
     elif parsed.subcommand == "evaluate":
         evaluate_command(
@@ -346,6 +372,7 @@ def main(args: list[str] | None = None) -> None:
             clips_dir=parsed.clips,
             config_path=parsed.config,
             embed=parsed.embed,
+            holding=parsed.holding,
         )
 
 

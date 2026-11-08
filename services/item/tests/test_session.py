@@ -445,4 +445,48 @@ def test_hand_crop_resets_when_item_changes(line):
     assert trips[0].crop.shape == (25, 25, 3)
 
 
+def test_session_with_masks(line):
+    session = DoorSession(line)
+    # Hand at (100, 50), box: (90, 40, 110, 60)
+    h0 = hand(1, 100.0, 50.0)
+    # Item 10 box overlaps hand by 50% (box: 95..115, 40..60 -> intersection 15*20=300, area 20*20=400 -> 0.75)
+    # BUT its mask pixels are at (150..160, 150..160) -> hand covers 0 mask pixels
+    it10 = Track(10, "item", Box(95.0, 40.0, 115.0, 60.0), 0.85, "bottle")
+    mask10 = np.zeros((300, 300), dtype=bool)
+    mask10[150:160, 150:160] = True
+
+    # Item 20 box has zero box overlap with hand (box: 120..140, 40..60)
+    # BUT its mask pixels are at (95..105, 45..55) -> completely inside hand box!
+    it20 = Track(20, "item", Box(120.0, 40.0, 140.0, 60.0), 0.85, "can")
+    mask20 = np.zeros((300, 300), dtype=bool)
+    mask20[45:55, 95:105] = True
+
+    masks = {10: mask10, 20: mask20}
+
+    # Frame 1: Hand outside
+    session.update([h0, it10, it20], ts="t0", masks=masks)
+
+    # Frame 2: Hand inside (crossing in)
+    h1 = hand(1, 100.0, 150.0)
+    it10_in = Track(10, "item", Box(95.0, 140.0, 115.0, 160.0), 0.85, "bottle")
+    it20_in = Track(20, "item", Box(120.0, 140.0, 140.0, 160.0), 0.85, "can")
+    mask10_in = np.zeros((300, 300), dtype=bool)
+    mask10_in[250:260, 250:260] = True
+    mask20_in = np.zeros((300, 300), dtype=bool)
+    mask20_in[145:155, 95:105] = True
+    masks_in = {10: mask10_in, 20: mask20_in}
+    session.update([h1, it10_in, it20_in], ts="t1", masks=masks_in)
+
+    # Frame 3: Hand inside empty
+    session.update([h1], ts="t2")
+
+    # Frame 4: Hand outside empty (crossing out -> PUT trip)
+    trips = session.update([h0], ts="t3")
+    assert len(trips) == 1
+    assert trips[0].type == "PUT"
+    assert trips[0].item.id == 20
+    assert trips[0].item.label == "can"
+
+
+
 
