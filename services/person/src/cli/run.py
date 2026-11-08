@@ -28,6 +28,7 @@ def execute(args):
             raise ValueError('Replay origin must be UTC')
     producer = None
     engine = None
+    encoders = ada_gallery = None
     if args.command == 'run':
         if not gallery.people:
             raise ValueError('Enroll people first')
@@ -39,15 +40,15 @@ def execute(args):
 
         if 'conformal' in policy:
             from ..identity.ensemble import EnsembleEngine
-            ada_arg = getattr(args, 'ada_gallery', None)
-            if ada_arg and Path(ada_arg).is_file():
-                ada_gallery = Gallery(ada_arg, json.loads(Path(ada_arg).read_text())['model'])
-            else:
-                default_ada = args.gallery.parent / 'gallery_adaface.json'
-                if default_ada.is_file():
-                    ada_gallery = Gallery(default_ada, json.loads(default_ada.read_text())['model'])
-                else:
-                    ada_gallery = gallery
+            from ..vision.encoders import FaceEncoders
+            ada_path = Path(args.ada_gallery or args.gallery.parent / 'gallery_adaface.json')
+            if not ada_path.is_file():
+                raise ValueError(f'Ensemble policy needs an AdaFace gallery: {ada_path}')
+            encoders = FaceEncoders(args.adaface, args.magface)
+            # Bound to the live AdaFace model: a gallery enrolled with another model is rejected here.
+            ada_gallery = Gallery(ada_path, encoders.signature)
+            if policy.get('ada_gallery') != ada_gallery.fingerprint or policy.get('ada_model') != encoders.signature:
+                raise ValueError('Ensemble policy is incompatible with current AdaFace gallery/model; recalibrate')
             engine = EnsembleEngine(gallery, ada_gallery, policy)
         else:
             accept, reject, margin = (policy[key] for key in ('accept', 'reject', 'margin'))
@@ -78,7 +79,9 @@ def execute(args):
                     last_sample = -float('inf')
                     track = None
                     continue
-                if Gallery(args.gallery, vision.signature).fingerprint != gallery.fingerprint:
+                if Gallery(args.gallery, vision.signature).fingerprint != gallery.fingerprint or (
+                        ada_gallery is not None
+                        and Gallery(ada_gallery.path, ada_gallery.model).fingerprint != ada_gallery.fingerprint):
                     raise ValueError('Gallery changed; restart and recalibrate before publishing')
                 now = time.monotonic()
                 if now - received > 1:
@@ -93,7 +96,13 @@ def execute(args):
                 if observed_time - last_sample < .2 - 1e-6:
                     continue
                 last_sample = observed_time
-                observation = vision.single_face(image)
+                if encoders is None:
+                    observation = vision.single_face(image)
+                else:  # ensemble: both encoders see the same aligned crop
+                    aligned = vision.aligned_face(image)
+                    observation = None if aligned is None else (
+                        engine.observation(vision.encode(aligned[0]), encoders.encode(aligned[0])['adaface']),
+                        aligned[1])
                 if observation is None:
                     if engine is not None:
                         engine.reset()

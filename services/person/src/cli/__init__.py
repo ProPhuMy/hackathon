@@ -38,6 +38,10 @@ def main():
             output.add_argument('--dry-run', action='store_true', help='Validated JSONL on stdout')
             output.add_argument('--broker')
             sub.add_argument('--policy', type=Path, required=True, help='Development-selected baseline policy JSON')
+            sub.add_argument('--adaface', type=Path, default=Path('models/adaface_ir50_ms1mv2.ckpt'),
+                             help='AdaFace checkpoint, used only with an ensemble (conformal) policy')
+            sub.add_argument('--magface', type=Path, default=Path('models/magface_iresnet50.pth'),
+                             help='MagFace checkpoint, loaded with AdaFace for an ensemble policy')
             sub.add_argument('--schema', type=Path, default=Path('../../contracts/person.seen.schema.json'))
     for command in ('calibrate', 'evaluate'):
         sub = commands.add_parser(command, help='Empirical single-face ArcFace baseline')

@@ -40,12 +40,15 @@ class Vision:
             return None
         return crop, float(box[4])
 
+    def encode(self, crop):
+        vector = unit(self.encoder.get_feat(crop).reshape(-1))
+        if vector.shape != (512,):
+            raise ValueError('Expected 512-D ArcFace output')
+        return vector
+
     def single_face(self, image):
         aligned = self.aligned_face(image)
         if aligned is None:
             return None
         crop, confidence = aligned
-        vector = unit(self.encoder.get_feat(crop).reshape(-1))
-        if vector.shape != (512,):
-            raise ValueError('Expected 512-D ArcFace output')
-        return vector, confidence
+        return self.encode(crop), confidence

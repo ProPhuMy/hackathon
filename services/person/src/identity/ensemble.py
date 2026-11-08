@@ -7,7 +7,7 @@ import itertools
 import re
 import numpy as np
 from sklearn.linear_model import LogisticRegression
-from .recognition import Baseline, Evidence
+from .recognition import Baseline, Evidence, unit
 
 
 def _scores(arcface, adaface, identities):
@@ -212,16 +212,32 @@ def evaluate(policy, data):
 
 
 class EnsembleEngine(Baseline):
-    """Baseline's evidence/reset policy, with the calibrated ensemble deciding each step."""
+    """Baseline's evidence/reset policy, with the calibrated ensemble deciding each step.
+
+    An observation is concat(unit(ArcFace), unit(AdaFace)) / sqrt(2). Evidence averages it like any
+    unit vector, and decide() splits it back so each gallery is scored only in its own embedding space.
+    """
     def __init__(self, arcface, adaface, policy):
+        identities = set(policy['identities'])
+        if set(arcface.people) != identities or set(adaface.people) != identities:
+            raise ValueError('Ensemble policy identities must match both the ArcFace and AdaFace galleries')
         self.arcface, self.adaface, self.policy = arcface, adaface, policy
+        self.split = None
+        # Baseline.__init__ is skipped on purpose: decide() replaces its scores/thresholds.
         self.evidence = Evidence()
         self.accepted = None
         self.generation = 0
 
+    def observation(self, arc_vector, ada_vector):
+        arc, ada = unit(arc_vector), unit(ada_vector)
+        self.split = len(arc)
+        return np.concatenate([arc, ada]) / np.sqrt(2)
+
     def decide(self, vector):
-        # Known bug, kept: the AdaFace gallery is scored with the ArcFace vector (no AdaFace encoder runs live).
-        result = predict(self.policy, self.arcface.scores(vector), self.adaface.scores(vector))
+        if self.split is None:
+            raise ValueError('Ensemble observations must be built with observation(arcface, adaface)')
+        arc, ada = unit(vector[:self.split]), unit(vector[self.split:])
+        result = predict(self.policy, self.arcface.scores(arc), self.adaface.scores(ada))
         if result['state'] == 'known':
             return result['person_id'], float(result['confidence'])
         if result['state'] == 'unknown':
