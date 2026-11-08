@@ -157,7 +157,7 @@ function App() {
       <div className="journey-status" role="status">
         {phase === 'pulling' ? 'SOMETHING IS PULLING.' :
          phase === 'wormhole' ? 'FOLDING SPACE.' :
-         phase === 'emerging' ? 'ARRIVING. OPENING UP.' :
+         phase === 'emerging' ? 'ARRIVING. BRACE FOR IMPACT.' :
          phase === 'returning' ? 'HEADING HOME.' : ''}
       </div>
       <div

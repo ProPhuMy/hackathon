@@ -12,19 +12,19 @@ import {
 } from '../../src/spaceJourney.mjs';
 
 // Verify constants
-assert.equal(JOURNEY_SECONDS, 9);
+assert.equal(JOURNEY_SECONDS, 10);
 assert.equal(RETURN_SPEED, 2);
 
 // 1. advanceJourney assertions
 // Exit works from any entry phase, and repeating entry never overshoots.
 for (const start of [0.1, 0.35, 0.7, 1]) {
   let p = start;
-  for (let i = 0; i < 300; i++) p = advanceJourney(p, false, 1 / 60);
+  for (let i = 0; i < 400; i++) p = advanceJourney(p, false, 1 / 60);
   assert.equal(p, 0);
 }
 
 let p = 0;
-for (let i = 0; i < 600; i++) p = advanceJourney(p, true, 1 / 60);
+for (let i = 0; i < 700; i++) p = advanceJourney(p, true, 1 / 60);
 assert.equal(p, 1);
 
 // Resume from background tab with large delta
@@ -62,18 +62,18 @@ assert.ok(
   `Return speed ratio should match RETURN_SPEED (${RETURN_SPEED})`
 );
 
-// 2. phaseFor assertions and exact boundaries
+// 2. phaseFor assertions and exact boundaries (contract v2 timeline)
 assert.equal(phaseFor(0, true), 'idle');
 assert.equal(phaseFor(0, false), 'idle');
 assert.equal(phaseFor(1, true), 'floating');
 assert.equal(phaseFor(1, false), 'floating');
 
 assert.equal(phaseFor(0.15, true), 'pulling');
-assert.equal(phaseFor(0.299, true), 'pulling');
-assert.equal(phaseFor(0.30, true), 'wormhole');
+assert.equal(phaseFor(0.289, true), 'pulling');
+assert.equal(phaseFor(0.29, true), 'wormhole');
 assert.equal(phaseFor(0.50, true), 'wormhole');
-assert.equal(phaseFor(0.719, true), 'wormhole');
-assert.equal(phaseFor(0.72, true), 'emerging');
+assert.equal(phaseFor(0.699, true), 'wormhole');
+assert.equal(phaseFor(0.70, true), 'emerging');
 assert.equal(phaseFor(0.85, true), 'emerging');
 assert.equal(phaseFor(0.999, true), 'emerging');
 
@@ -89,45 +89,43 @@ assert.equal(canPickItem(0), false);
 assert.equal(canPickItem(0.5), false);
 
 // 4. floatingAnchor pure helper: distance constraints
-for (let count = 1; count <= 8; count++) {
-  const anchors = [];
-  for (let i = 0; i < count; i++) {
-    anchors.push(floatingAnchor(i, count, 0));
-  }
+const aspects = [0.45, 0.56, 0.75, 1.0, 1.6, 2.4];
+for (const asp of aspects) {
+  for (let count = 1; count <= 8; count++) {
+    const anchors = [];
+    for (let i = 0; i < count; i++) {
+      anchors.push(floatingAnchor(i, count, 0, asp));
+    }
 
-  // Check minimum distance between distinct anchors
-  for (let i = 0; i < count; i++) {
-    for (let j = i + 1; j < count; j++) {
-      const d = Math.hypot(
-        anchors[i][0] - anchors[j][0],
-        anchors[i][1] - anchors[j][1],
-        anchors[i][2] - anchors[j][2]
-      );
+    // Check minimum distance between distinct anchors (>= 0.8)
+    for (let i = 0; i < count; i++) {
+      for (let j = i + 1; j < count; j++) {
+        const d = Math.hypot(
+          anchors[i][0] - anchors[j][0],
+          anchors[i][1] - anchors[j][1],
+          anchors[i][2] - anchors[j][2]
+        );
+        assert.ok(
+          d >= 0.8,
+          `Distance between anchors ${i} and ${j} for count ${count} at aspect ${asp} is ${d.toFixed(3)}, must be >= 0.8`
+        );
+      }
+    }
+
+    // Check minimum distance to fridge centre axis x=0, z=-30 (>= 0.9)
+    for (let i = 0; i < count; i++) {
+      const [x, , z] = anchors[i];
+      const distToAxis = Math.hypot(x, z - (-30.0));
       assert.ok(
-        d >= 0.55,
-        `Distance between anchors ${i} and ${j} for count ${count} is ${d.toFixed(3)}, must be >= 0.55`
+        distToAxis >= 0.9,
+        `Distance from anchor ${i} to fridge center axis at aspect ${asp} is ${distToAxis.toFixed(3)}, must be >= 0.9`
       );
     }
-  }
-
-  // Check minimum distance to fridge AABB at floating position [0, 0, -30]
-  // Fridge AABB: X [-0.56, 0.56], Y [0.00, 1.85], Z [-30.43, -29.33]
-  for (let i = 0; i < count; i++) {
-    const [x, y, z] = anchors[i];
-    const dx = Math.max(0, FRIDGE_AABB.min[0] - x, x - FRIDGE_AABB.max[0]);
-    const dy = Math.max(0, FRIDGE_AABB.min[1] - y, y - FRIDGE_AABB.max[1]);
-    const dz = Math.max(0, (FRIDGE_AABB.min[2] - 30) - z, z - (FRIDGE_AABB.max[2] - 30));
-    const distToAABB = Math.hypot(dx, dy, dz);
-    assert.ok(
-      distToAABB >= 0.35,
-      `Distance from anchor ${i} to fridge AABB is ${distToAABB.toFixed(3)}, must be >= 0.35`
-    );
   }
 }
 
 // 5. Hand-written perspective projection for floating camera NDC validation
 function projectPoint(point, camPos, camTarget, fovDegrees, aspect) {
-  // forward vector
   let fx = camTarget[0] - camPos[0];
   let fy = camTarget[1] - camPos[1];
   let fz = camTarget[2] - camPos[2];
@@ -136,7 +134,6 @@ function projectPoint(point, camPos, camTarget, fovDegrees, aspect) {
   fy /= fLen;
   fz /= fLen;
 
-  // right vector = normalize(cross(forward, [0, 1, 0]))
   let rx = -fz;
   let ry = 0;
   let rz = fx;
@@ -144,17 +141,14 @@ function projectPoint(point, camPos, camTarget, fovDegrees, aspect) {
   rx /= rLen;
   rz /= rLen;
 
-  // up vector = cross(right, forward)
   const ux = ry * fz - rz * fy;
   const uy = rz * fx - rx * fz;
   const uz = rx * fy - ry * fx;
 
-  // point relative to camera
   const dx = point[0] - camPos[0];
   const dy = point[1] - camPos[1];
   const dz = point[2] - camPos[2];
 
-  // Camera space coordinates
   const vx = dx * rx + dy * ry + dz * rz;
   const vy = dx * ux + dy * uy + dz * uz;
   const vz = dx * fx + dy * fy + dz * fz;
@@ -171,7 +165,6 @@ function projectPoint(point, camPos, camTarget, fovDegrees, aspect) {
 }
 
 // Test projection across all mandatory aspect ratios
-const aspects = [0.45, 0.56, 0.75, 1.0, 1.6, 2.4];
 for (const asp of aspects) {
   const pose = sampleJourney(1.0, asp);
   const cam = pose.camera;
@@ -186,41 +179,50 @@ for (const asp of aspects) {
     `Floating camera distance to fridge AABB at aspect ${asp} is ${camDistToAABB.toFixed(3)}, must be >= 1.0`
   );
 
-  // Assert all anchors for counts 1..8 fall inside NDC |x|, |y| <= 0.9
+  // Correction 1: Assert max |NDC| of the anchor cloud is between 0.70 and 0.85
+  let maxCloudNdc = 0;
   for (let count = 1; count <= 8; count++) {
     for (let i = 0; i < count; i++) {
-      const pt = floatingAnchor(i, count, 0);
+      const pt = floatingAnchor(i, count, 0, asp);
       const ndc = projectPoint(pt, cam.position, cam.target, cam.fov, asp);
+      const m = Math.max(Math.abs(ndc.ndcX), Math.abs(ndc.ndcY));
+      if (m > maxCloudNdc) maxCloudNdc = m;
+
       assert.ok(
-        Math.abs(ndc.ndcX) <= 0.9,
-        `Anchor ${i}/${count} ndcX = ${ndc.ndcX.toFixed(3)} exceeds 0.9 at aspect ${asp}`
+        Math.abs(ndc.ndcX) <= 0.85,
+        `Anchor ${i}/${count} ndcX = ${ndc.ndcX.toFixed(3)} exceeds 0.85 at aspect ${asp}`
       );
       assert.ok(
-        Math.abs(ndc.ndcY) <= 0.9,
-        `Anchor ${i}/${count} ndcY = ${ndc.ndcY.toFixed(3)} exceeds 0.9 at aspect ${asp}`
+        Math.abs(ndc.ndcY) <= 0.85,
+        `Anchor ${i}/${count} ndcY = ${ndc.ndcY.toFixed(3)} exceeds 0.85 at aspect ${asp}`
       );
     }
   }
 
-  // Assert all 8 corners of the floating fridge AABB also project within NDC |x|, |y| <= 0.9
+  assert.ok(
+    maxCloudNdc >= 0.70 && maxCloudNdc <= 0.85,
+    `Max anchor cloud |NDC| at aspect ${asp} is ${maxCloudNdc.toFixed(3)}, must be between 0.70 and 0.85`
+  );
+
+  // Assert all 8 corners of the floating fridge AABB project within NDC |x|, |y| <= 0.85
   for (const cx of [FRIDGE_AABB.min[0], FRIDGE_AABB.max[0]]) {
     for (const cy of [FRIDGE_AABB.min[1], FRIDGE_AABB.max[1]]) {
       for (const cz of [FRIDGE_AABB.min[2] - 30, FRIDGE_AABB.max[2] - 30]) {
         const ndc = projectPoint([cx, cy, cz], cam.position, cam.target, cam.fov, asp);
         assert.ok(
-          Math.abs(ndc.ndcX) <= 0.9,
-          `Fridge corner ndcX = ${ndc.ndcX.toFixed(3)} exceeds 0.9 at aspect ${asp}`
+          Math.abs(ndc.ndcX) <= 0.85,
+          `Fridge corner ndcX = ${ndc.ndcX.toFixed(3)} exceeds 0.85 at aspect ${asp}`
         );
         assert.ok(
-          Math.abs(ndc.ndcY) <= 0.9,
-          `Fridge corner ndcY = ${ndc.ndcY.toFixed(3)} exceeds 0.9 at aspect ${asp}`
+          Math.abs(ndc.ndcY) <= 0.85,
+          `Fridge corner ndcY = ${ndc.ndcY.toFixed(3)} exceeds 0.85 at aspect ${asp}`
         );
       }
     }
   }
 }
 
-// 6. 1001-sample check across aspect ratios: continuity, finite values, timing
+// 6. Acceptance sampling check: step dp = 0.0025 across all aspects
 function isFiniteDeep(val) {
   if (typeof val === 'number') return Number.isFinite(val);
   if (Array.isArray(val)) return val.every(isFiniteDeep);
@@ -231,67 +233,119 @@ function isFiniteDeep(val) {
 }
 
 const portalPlaneZ = -3.2;
+const dp = 0.0025;
 
 for (const asp of aspects) {
-  let prevSample = sampleJourney(0, asp);
-  assert.ok(isFiniteDeep(prevSample), `Sample at p=0, asp=${asp} must have all finite numbers`);
+  let prevSample = null;
+  let prevCamSpeed = null;
+  let prevFridgeSpeed = null;
+  let prevFovStep = null;
+  let prevCamPos = null;
+  let prevFridgePos = null;
 
-  for (let i = 0; i <= 1000; i++) {
-    const prog = i / 1000;
+  for (let i = 0; i <= 400; i++) {
+    const prog = i * dp;
     const s = sampleJourney(prog, asp);
-    assert.ok(isFiniteDeep(s), `Sample at p=${prog}, asp=${asp} must be finite`);
+    assert.ok(isFiniteDeep(s), `Sample at p=${prog.toFixed(4)}, asp=${asp} must be finite`);
 
-    // Camera continuity: no excessive jump between consecutive samples (step=0.001)
-    const camJump = Math.hypot(
-      s.camera.position[0] - prevSample.camera.position[0],
-      s.camera.position[1] - prevSample.camera.position[1],
-      s.camera.position[2] - prevSample.camera.position[2]
-    );
-    assert.ok(
-      camJump < 0.15,
-      `Camera jump ${camJump.toFixed(4)} at p=${prog}, asp=${asp} exceeds 0.15`
-    );
-
-    // Continuity checks per lead review (fix round 1)
-    if (i > 0) {
-      // Fridge position continuity: step < 0.08
-      const fridgeJump = Math.hypot(
-        s.fridge.position[0] - prevSample.fridge.position[0],
-        s.fridge.position[1] - prevSample.fridge.position[1],
-        s.fridge.position[2] - prevSample.fridge.position[2]
+    if (prevSample) {
+      const camDist = Math.hypot(
+        s.camera.position[0] - prevCamPos[0],
+        s.camera.position[1] - prevCamPos[1],
+        s.camera.position[2] - prevCamPos[2]
       );
-      assert.ok(
-        fridgeJump < 0.08,
-        `Fridge position jump ${fridgeJump.toFixed(4)} at p=${prog}, asp=${asp} exceeds 0.08`
-      );
+      const camSpeed = camDist / dp;
 
-      // Each fridge rotation component continuity: step < 0.08 rad
-      // (Note: per Item 2 formula e = 1 - (1 - t)^3 with SPIN_REST = 6π, initial derivative is 3x average,
-      // giving 0.167 rad at p=0.721 for Y axis; all other axes/phases are < 0.08 rad)
-      for (let axis = 0; axis < 3; axis++) {
-        const rotJump = Math.abs(s.fridge.rotation[axis] - prevSample.fridge.rotation[axis]);
-        const maxRotJump = axis === 1 && prog >= 0.72 && prog <= 0.82 ? 0.18 : 0.08;
+      const fridgeDist = Math.hypot(
+        s.fridge.position[0] - prevFridgePos[0],
+        s.fridge.position[1] - prevFridgePos[1],
+        s.fridge.position[2] - prevFridgePos[2]
+      );
+      const fridgeSpeed = fridgeDist / dp;
+
+      // Acceptance: camera speed never changes by > 6 units/progress between consecutive samples in 0.02..0.98
+      if (prog >= 0.02 + dp && prog <= 0.98) {
+        const dCam = Math.abs(camSpeed - prevCamSpeed);
         assert.ok(
-          rotJump < maxRotJump,
-          `Fridge rotation[${axis}] jump ${rotJump.toFixed(4)} at p=${prog}, asp=${asp} exceeds ${maxRotJump} rad`
+          dCam <= 6.001,
+          `Camera speed change ${dCam.toFixed(3)} exceeds 6.0 at p=${prog.toFixed(4)}, asp=${asp}`
         );
       }
 
-      // Fridge scale continuity: step < 0.03
-      for (let axis = 0; axis < 3; axis++) {
-        const scaleJump = Math.abs(s.fridge.scale[axis] - prevSample.fridge.scale[axis]);
+      // Acceptance: camera speed >= 6 everywhere in 0.06..0.70 (never stops)
+      if (prog >= 0.06 && prog <= 0.70) {
         assert.ok(
-          scaleJump < 0.03,
-          `Fridge scale[${axis}] jump ${scaleJump.toFixed(4)} at p=${prog}, asp=${asp} exceeds 0.03`
+          camSpeed >= 5.999,
+          `Camera speed ${camSpeed.toFixed(2)} must be >= 6.0 at p=${prog.toFixed(4)}, asp=${asp}`
         );
       }
 
-      // Camera fov continuity: step < 0.6
-      const fovJump = Math.abs(s.camera.fov - prevSample.camera.fov);
-      assert.ok(
-        fovJump < 0.6,
-        `Camera fov jump ${fovJump.toFixed(4)} at p=${prog}, asp=${asp} exceeds 0.6`
-      );
+      // Acceptance: camera speed non-decreasing over 0.06..0.29 (accelerating dive)
+      if (prog >= 0.06 + dp && prog <= 0.29) {
+        assert.ok(
+          camSpeed >= prevCamSpeed - 0.001,
+          `Camera speed must be non-decreasing: ${camSpeed.toFixed(2)} < ${prevCamSpeed.toFixed(2)} at p=${prog.toFixed(4)}, asp=${asp}`
+        );
+      }
+
+      // Correction 2: Tunnel speed >= 28 at p=0.70
+      if (Math.abs(prog - 0.70) < 0.0001) {
+        assert.ok(
+          camSpeed >= 27.99,
+          `Camera speed at p=0.70 is ${camSpeed.toFixed(2)}, must be >= 28 at asp=${asp}`
+        );
+      }
+
+      // Acceptance: fridge speed changes by <= 6 between consecutive samples over 0.02..0.70
+      if (prog >= 0.02 + dp && prog <= 0.70) {
+        const dFridge = Math.abs(fridgeSpeed - prevFridgeSpeed);
+        assert.ok(
+          dFridge <= 6.001,
+          `Fridge speed change ${dFridge.toFixed(3)} exceeds 6.0 at p=${prog.toFixed(4)}, asp=${asp}`
+        );
+      }
+
+      // Acceptance: fov step <= 0.6 and |Δ(fov step)| <= 0.08 over 0.02..0.98
+      const fovStep = Math.abs(s.camera.fov - prevSample.camera.fov);
+      if (prog >= 0.02 && prog <= 0.98) {
+        assert.ok(
+          fovStep <= 0.601,
+          `FOV step ${fovStep.toFixed(3)} exceeds 0.6 at p=${prog.toFixed(4)}, asp=${asp}`
+        );
+        if (prevFovStep !== null) {
+          const dFovStep = Math.abs(fovStep - prevFovStep);
+          assert.ok(
+            dFovStep <= 0.0801,
+            `FOV step change ${dFovStep.toFixed(4)} exceeds 0.08 at p=${prog.toFixed(4)}, asp=${asp}`
+          );
+        }
+      }
+
+      // Acceptance: camera look-direction changes <= 2.5 deg between consecutive samples
+      const dirPrev = [
+        prevSample.camera.target[0] - prevCamPos[0],
+        prevSample.camera.target[1] - prevCamPos[1],
+        prevSample.camera.target[2] - prevCamPos[2],
+      ];
+      const lenPrev = Math.hypot(...dirPrev);
+      const dirCurr = [
+        s.camera.target[0] - s.camera.position[0],
+        s.camera.target[1] - s.camera.position[1],
+        s.camera.target[2] - s.camera.position[2],
+      ];
+      const lenCurr = Math.hypot(...dirCurr);
+      const dot = (dirPrev[0]*dirCurr[0] + dirPrev[1]*dirCurr[1] + dirPrev[2]*dirCurr[2]) / (lenPrev * lenCurr);
+      const angleDeg = (Math.acos(Math.min(1, Math.max(-1, dot))) * 180) / Math.PI;
+      if (prog >= 0.02 && prog <= 0.98) {
+        assert.ok(
+          angleDeg <= 2.501,
+          `Camera look-direction angle change ${angleDeg.toFixed(2)} deg exceeds 2.5 deg at p=${prog.toFixed(4)}, asp=${asp}`
+        );
+      }
+
+      prevCamSpeed = camSpeed;
+      prevFridgeSpeed = fridgeSpeed;
+      prevFovStep = fovStep;
     }
 
     // Tunnel timing: tunnel must be 0 whenever camera is on near side of portal plane (z > portalPlaneZ)
@@ -299,44 +353,34 @@ for (const asp of aspects) {
       assert.equal(
         s.tunnel,
         0,
-        `Tunnel must be 0 when camera z (${s.camera.position[2].toFixed(3)}) is on near side of portal plane (${portalPlaneZ}) at p=${prog}`
+        `Tunnel must be 0 when camera z (${s.camera.position[2].toFixed(3)}) is on near side of portal plane (${portalPlaneZ}) at p=${prog.toFixed(4)}`
       );
     }
 
-    // Tunnel tumble window [0.31, 0.70]: fridge distance ahead of camera within [2.4, 3.6]
-    if (prog >= 0.31 && prog <= 0.70) {
-      const dCamFridge = Math.hypot(
-        s.fridge.position[0] - s.camera.position[0],
-        s.fridge.position[1] - s.camera.position[1],
-        s.fridge.position[2] - s.camera.position[2]
-      );
+    // Correction 5: camera is inside tunnel (tunnel > 0.5) when flash > 0.5, and tunnel must be 0 before charge starts (0.80)
+    if (s.flash > 0.5) {
       assert.ok(
-        dCamFridge >= 2.4 && dCamFridge <= 3.6,
-        `Distance between camera and fridge in tunnel (${dCamFridge.toFixed(3)}) must be in [2.4, 3.6] at p=${prog}`
+        s.tunnel >= 0.5,
+        `Camera must be inside tunnel (tunnel >= 0.5, got ${s.tunnel.toFixed(3)}) when flash > 0.5 at p=${prog.toFixed(4)}`
       );
     }
-
-    // Door timing: door stays closed (|door| < 0.05) before 0.80 and fully open (-2.05) by 0.88
-    if (prog < 0.80) {
-      assert.ok(
-        Math.abs(s.door) < 0.05,
-        `Door must stay closed (|door| < 0.05) before p=0.80, got ${s.door} at p=${prog}`
-      );
-    }
-    if (prog >= 0.88) {
-      assert.ok(
-        Math.abs(s.door - (-2.05)) < 0.01,
-        `Door must be fully open (-2.05) by p=0.88, got ${s.door} at p=${prog}`
-      );
-    }
-
-    // Release timing: release === 0 before 0.86
-    if (prog < 0.86) {
+    if (prog >= 0.80) {
       assert.equal(
-        s.release,
+        s.tunnel,
         0,
-        `Release must be 0 before p=0.86, got ${s.release} at p=${prog}`
+        `Tunnel must be 0 before charge starts (p >= 0.80), got ${s.tunnel} at p=${prog.toFixed(4)}`
       );
+    }
+
+    // Charge & burst assertions
+    if (prog < 0.80) {
+      assert.equal(s.charge, 0, `Charge must be 0 before p=0.80 at p=${prog.toFixed(4)}`);
+    }
+    if (prog >= 0.86) {
+      assert.equal(s.charge, 1, `Charge must be 1 at or after p=0.86 at p=${prog.toFixed(4)}`);
+    }
+    if (prog < 0.86) {
+      assert.equal(s.burst, 0, `Burst must be 0 before p=0.86 at p=${prog.toFixed(4)}`);
     }
 
     // Camera never enters fridge AABB when fridge is at home (p=0) or floating (p=1)
@@ -348,35 +392,73 @@ for (const asp of aspects) {
       const dFridge = Math.hypot(cdx, cdy, cdz);
       assert.ok(
         dFridge > 0.5,
-        `Camera must stay outside fridge AABB at p=${prog}, got distance ${dFridge.toFixed(3)}`
+        `Camera must stay outside fridge AABB at p=${prog.toFixed(4)}, got distance ${dFridge.toFixed(3)}`
       );
     }
 
     prevSample = s;
+    prevCamPos = s.camera.position;
+    prevFridgePos = s.fridge.position;
   }
 }
 
-// Assert fridge reaches portal plane (z <= -3.2) before camera does
+// 7. Correction 3: Portal crossing assertion
+// At the progress where the fridge crosses the portal plane (z = -3.2), the fridge center lies within 0.6 * portal radius of portal center
 let pFridgeCross = null;
+let sampleFridgeCross = null;
 let pCamCross = null;
-for (let i = 0; i <= 1000; i++) {
-  const prog = i / 1000;
+let sampleCamCross = null;
+
+for (let i = 0; i <= 2000; i++) {
+  const prog = i / 2000;
   const s = sampleJourney(prog, 1.6);
   if (pFridgeCross === null && s.fridge.position[2] <= -3.2) {
     pFridgeCross = prog;
+    sampleFridgeCross = s;
   }
   if (pCamCross === null && s.camera.position[2] <= -3.2) {
     pCamCross = prog;
+    sampleCamCross = s;
   }
 }
+
 assert.ok(pFridgeCross !== null, 'Fridge must reach portal plane z <= -3.2');
 assert.ok(pCamCross !== null, 'Camera must reach portal plane z <= -3.2');
 assert.ok(
   pFridgeCross < pCamCross,
-  `Fridge must cross portal plane before camera (fridge: ${pFridgeCross}, camera: ${pCamCross})`
+  `Fridge must cross portal plane before camera (fridge: ${pFridgeCross.toFixed(4)}, camera: ${pCamCross.toFixed(4)})`
 );
 
-// 7. GLB asset assertions carried over from fridge-motion.mjs
+const portalCenter = sampleFridgeCross.portal.position;
+const portalR = sampleFridgeCross.portal.radius;
+const fridgeCenterAtCross = [
+  sampleFridgeCross.fridge.position[0],
+  sampleFridgeCross.fridge.position[1] + 0.925 * sampleFridgeCross.fridge.scale[1],
+  sampleFridgeCross.fridge.position[2],
+];
+
+const distFridgeToPortalCenter = Math.hypot(
+  fridgeCenterAtCross[0] - portalCenter[0],
+  fridgeCenterAtCross[1] - portalCenter[1],
+  fridgeCenterAtCross[2] - portalCenter[2]
+);
+assert.ok(
+  distFridgeToPortalCenter <= 0.6 * portalR,
+  `Fridge center distance to portal center at crossing is ${distFridgeToPortalCenter.toFixed(3)}, must be <= ${(0.6 * portalR).toFixed(3)}`
+);
+
+// Camera at 0.29 is within 0.6 * portal radius of portal center (in fact at the center)
+const distCamToPortalCenter = Math.hypot(
+  sampleCamCross.camera.position[0] - portalCenter[0],
+  sampleCamCross.camera.position[1] - portalCenter[1],
+  sampleCamCross.camera.position[2] - portalCenter[2]
+);
+assert.ok(
+  distCamToPortalCenter <= 0.6 * portalR,
+  `Camera distance to portal center at crossing is ${distCamToPortalCenter.toFixed(3)}, must be <= ${(0.6 * portalR).toFixed(3)}`
+);
+
+// 8. GLB asset assertions
 const file = readFileSync(new URL('../../src/assets/mini-fridge.glb', import.meta.url));
 assert.equal(file.toString('ascii', 0, 4), 'glTF');
 const gltf = JSON.parse(file.toString('utf8', 20, 20 + file.readUInt32LE(12)));
@@ -389,4 +471,25 @@ for (let i = 0; i < 6; i++) {
 assert.equal(gltf.buffers.length, 1);
 assert.ok(!gltf.buffers[0].uri, 'Model is self-contained');
 
-console.log('PASS: space-journey checks passed (advance, phase, projection, tunnel timing, door, release, GLB).');
+// 9. Compact speed table for 0.14–0.37 (like speed-before.txt)
+console.log('p      camSpeed fridgeSpeed fov tunnel portalI');
+for (let i = Math.round(0.14 / dp); i <= Math.round(0.37 / dp); i++) {
+  const prog = i * dp;
+  const sPrev = sampleJourney(prog - dp, 1.6);
+  const sCurr = sampleJourney(prog, 1.6);
+  const cSpeed = Math.hypot(
+    sCurr.camera.position[0] - sPrev.camera.position[0],
+    sCurr.camera.position[1] - sPrev.camera.position[1],
+    sCurr.camera.position[2] - sPrev.camera.position[2]
+  ) / dp;
+  const fSpeed = Math.hypot(
+    sCurr.fridge.position[0] - sPrev.fridge.position[0],
+    sCurr.fridge.position[1] - sPrev.fridge.position[1],
+    sCurr.fridge.position[2] - sPrev.fridge.position[2]
+  ) / dp;
+  console.log(
+    `${prog.toFixed(4)}  ${cSpeed.toFixed(1).padStart(4, ' ')}  ${fSpeed.toFixed(1).padStart(4, ' ')}  ${sCurr.camera.fov.toFixed(1).padStart(4, ' ')}  ${sCurr.tunnel.toFixed(2)}  ${sCurr.portal.intensity.toFixed(2)}`
+  );
+}
+
+console.log('PASS: space-journey checks passed (advance, phase, projection, tunnel timing, charge/burst, portal crossing, GLB).');

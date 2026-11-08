@@ -29,7 +29,12 @@ const horizonVertexShader = /* glsl */`
 
 const horizonFragmentShader = /* glsl */`
   ${PALETTE_GLSL}
+  ${SIMPLEX_NOISE_3D}
   uniform float uIntensity;
+  uniform float uDive;
+  uniform float uTime;
+  uniform float uSwirl;
+  uniform float uReduced;
   varying vec2 vUv;
 
   void main() {
@@ -39,11 +44,47 @@ const horizonFragmentShader = /* glsl */`
 
     // Hot rim edge glow
     float rim = smoothstep(0.85, 1.0, dist);
-    vec3 col = mix(VOID_COLOR, CYAN_COLOR * 0.8 + STAR_COLOR * 0.2, rim * 0.7);
+    vec3 rimCol = mix(VOID_COLOR, CYAN_COLOR * 0.8 + STAR_COLOR * 0.2, rim * 0.7);
+
+    // Tunnel preview rings & streaks pulled toward the center as uDive -> 1
+    // Rings move toward the centre (into the hole) and speed increases with dive
+    float effSpeed = (uReduced > 0.5) ? 0.0 : (uTime * (2.0 + 8.0 * uDive));
+    float angle = atan(p.y, p.x);
+
+    // Pull coordinates toward center as dive increases
+    float rPull = pow(dist, mix(1.0, 0.45, uDive));
+
+    // Ring phase: adding speed makes the concentric waves travel inward (r decreases over time)
+    float ringPhase = rPull * 18.0 + effSpeed * 3.2;
+    float rings = sin(ringPhase);
+    rings = pow(rings * 0.5 + 0.5, 3.5);
+
+    // Streaks spiraling inward
+    float twist = rPull * 2.0 * (1.0 + 2.0 * uSwirl);
+    float streakNoise = snoise(vec3(cos(angle + twist) * 2.6, sin(angle + twist) * 2.6, rPull * 3.5 + effSpeed * 0.8));
+    streakNoise = smoothstep(0.2, 0.75, streakNoise);
+
+    float pattern = rings * 0.65 + streakNoise * 0.5;
+
+    // Color gradient across radial rings using tunnel palette
+    float hue = fract(rPull * 0.6 - effSpeed * 0.05);
+    vec3 baseCol = (hue < 0.33) ? mix(VIOLET_COLOR, MAGENTA_COLOR, hue * 3.0) :
+                   (hue < 0.66) ? mix(MAGENTA_COLOR, CYAN_COLOR, (hue - 0.33) * 3.0) :
+                                  mix(CYAN_COLOR, VIOLET_COLOR, (hue - 0.66) * 3.0);
+
+    vec3 previewCol = baseCol * pattern;
+    // Core brightness boost matching tunnel look
+    previewCol += mix(CYAN_COLOR, vec3(1.0), 0.7) * (pow(rings, 4.0) * 0.5 + (1.0 - smoothstep(0.0, 0.5, rPull)) * 0.4);
+
+    // At uDive = 0, interior is pure VOID_COLOR occluding stars behind it.
+    // As uDive -> 1, previewCol brightens smoothly so crossing disk and tunnel look alike.
+    float diveWeight = smoothstep(0.02, 0.95, uDive);
+    vec3 interiorCol = mix(VOID_COLOR, previewCol * 1.15, diveWeight);
+
+    vec3 finalCol = mix(interiorCol, rimCol, rim);
 
     // Normal blending with depthWrite true occludes stars behind it
-    float alpha = uIntensity;
-    gl_FragColor = vec4(col, alpha);
+    gl_FragColor = vec4(finalCol, uIntensity);
   }
 `
 
@@ -266,12 +307,18 @@ const tunnelFragmentShader = /* glsl */`
     float farGlow = smoothstep(0.35, 1.0, zNorm);
     col += mix(CYAN_COLOR, vec3(1.0), 0.75) * (farGlow * 0.9);
 
+    // Ensure near-camera region maintains ring contrast and brightness
+    float nearContrast = 1.0 + (1.0 - smoothstep(0.0, 0.25, zNorm)) * 0.45;
+    col *= nearContrast;
+
     // Edge darkening near camera end
-    float entranceFade = smoothstep(0.0, 0.03, zNorm);
+    float entranceFade = smoothstep(0.0, 0.015, zNorm);
     float exitFade = smoothstep(1.0, 0.94, zNorm);
     col *= (entranceFade * exitFade);
 
-    col *= uTunnel;
+    // Smooth ingress ramp: replace col *= uTunnel with ramp (Correction 3)
+    float tunnelRamp = smoothstep(0.0, 0.55, uTunnel);
+    col *= tunnelRamp;
 
     float alpha = clamp(max(max(col.r, col.g), col.b), 0.0, 1.0);
     gl_FragColor = vec4(col, alpha);
@@ -387,11 +434,18 @@ export default function Wormhole({ rig }) {
         portalGroupRef.current.lookAt(_camPos)
         portalGroupRef.current.scale.setScalar(pRadius)
 
+        const camDist = _camPos.distanceTo(_portalPos)
+        const dive = 1.0 - THREE.MathUtils.smoothstep(camDist, pRadius * 0.6, pRadius * 3.5)
+
         if (horizonMeshRef.current?.material?.uniforms) {
           horizonMeshRef.current.material.uniforms.uIntensity.value = pIntensity
+          horizonMeshRef.current.material.uniforms.uDive.value = dive
+          horizonMeshRef.current.material.uniforms.uTime.value = time
+          horizonMeshRef.current.material.uniforms.uSwirl.value = pSwirl
+          horizonMeshRef.current.material.uniforms.uReduced.value = reducedVal
         }
         // Fade the glowing parts as the camera nears the mouth so the dive reads as falling into darkness, not a white-out.
-        const glow = pIntensity * THREE.MathUtils.smoothstep(_camPos.distanceTo(_portalPos), pRadius * 0.9, pRadius * 3.5)
+        const glow = pIntensity * THREE.MathUtils.smoothstep(camDist, pRadius * 0.9, pRadius * 3.5)
         if (accretionMeshRef.current?.material?.uniforms) {
           accretionMeshRef.current.material.uniforms.uTime.value = time
           accretionMeshRef.current.material.uniforms.uIntensity.value = glow
@@ -478,6 +532,10 @@ export default function Wormhole({ rig }) {
             fragmentShader={horizonFragmentShader}
             uniforms={{
               uIntensity: { value: 0 },
+              uDive: { value: 0 },
+              uTime: { value: 0 },
+              uSwirl: { value: 0 },
+              uReduced: { value: 0 },
             }}
             transparent
             depthWrite

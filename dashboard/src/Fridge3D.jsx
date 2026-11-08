@@ -11,6 +11,7 @@ import {
   sampleJourney,
 } from './spaceJourney.mjs';
 import { SLOT_TO_DEMO_ID } from './itemMapping.js';
+import Explosion from './space/Explosion.jsx';
 import Starfield from './space/Starfield.jsx';
 import Wormhole from './space/Wormhole.jsx';
 import SpaceEffects from './space/SpaceEffects.jsx';
@@ -91,6 +92,8 @@ function FridgeWorld({
     door: null,
     foodNodes: new Map(), // slot -> original food node in fridge model
   });
+  const cabinetMeshesRef = useRef([]);
+  const lastCabinetVisibleRef = useRef(true);
   const phaseRef = useRef('idle');
   const pickRef = useRef(false);
   const [canPick, setCanPick] = useState(false);
@@ -109,9 +112,30 @@ function FridgeWorld({
     return () => media.removeEventListener('change', update);
   }, []);
 
-  // Set up model parts, materials, and hide unmapped foods
+  // Set up model parts, materials, cached cabinet meshes, and hide unmapped foods
   useEffect(() => {
     parts.current.door = model.getObjectByName('DoorPivot');
+
+    // Cache cabinet + door meshes (every node not under Food_*), for detonation swap at burst=0.02
+    const cabinetMeshes = [];
+    model.traverse((child) => {
+      if (child.isMesh) {
+        let isFood = false;
+        let p = child;
+        while (p) {
+          if (p.name && p.name.startsWith('Food_')) {
+            isFood = true;
+            break;
+          }
+          p = p.parent;
+        }
+        if (!isFood) {
+          cabinetMeshes.push(child);
+        }
+      }
+    });
+    cabinetMeshesRef.current = cabinetMeshes;
+    lastCabinetVisibleRef.current = true;
 
     const validSlots = new Set(
       items
@@ -188,15 +212,21 @@ function FridgeWorld({
       camera.updateProjectionMatrix();
     }
 
-    // 2. Fridge transform & idle/floating bob (applied on the fridge group)
+    // Detonation swap: Cabinet + DoorPivot meshes visible iff burst < 0.02
+    const cabinetVisible = sample.burst < 0.02;
+    if (cabinetVisible !== lastCabinetVisibleRef.current) {
+      lastCabinetVisibleRef.current = cabinetVisible;
+      for (let i = 0; i < cabinetMeshesRef.current.length; i++) {
+        cabinetMeshesRef.current[i].visible = cabinetVisible;
+      }
+    }
+
+    // 2. Fridge transform & idle/floating bob & charge tremble/swell
     const fg = fridgeGroupRef.current;
     if (fg) {
       _vPos.set(...sample.fridge.position);
       _euler.set(...sample.fridge.rotation);
 
-      // Idle bob/yaw (progress === 0): y bob ±0.04, yaw ±4° (±0.07 rad)
-      // Floating bob/yaw (progress === 1): y bob ±0.02, yaw ±6° (±0.10 rad)
-      // Fades to 0 during travel; off when reduced
       if (!r.reduced) {
         if (r.progress === 0) {
           _vPos.y += Math.sin(r.time * 0.8) * 0.04;
@@ -205,46 +235,58 @@ function FridgeWorld({
           _vPos.y += Math.sin(r.time * 0.6) * 0.02;
           _euler.y += Math.sin(r.time * 0.4) * 0.10;
         }
+
+        // Charge tremble (amplitude 0.035*charge pos, 0.04*charge rad rot)
+        if (sample.charge > 0) {
+          const c = sample.charge;
+          _vPos.x += (Math.sin(r.time * 53.0) + Math.sin(r.time * 79.0) * 0.5) / 1.5 * 0.035 * c;
+          _vPos.y += (Math.sin(r.time * 61.0) + Math.sin(r.time * 83.0) * 0.5) / 1.5 * 0.035 * c;
+          _vPos.z += (Math.sin(r.time * 67.0) + Math.sin(r.time * 71.0) * 0.5) / 1.5 * 0.035 * c;
+
+          _euler.x += (Math.sin(r.time * 47.0) + Math.sin(r.time * 67.0) * 0.5) / 1.5 * 0.04 * c;
+          _euler.y += (Math.sin(r.time * 59.0) + Math.sin(r.time * 73.0) * 0.5) / 1.5 * 0.04 * c;
+          _euler.z += (Math.sin(r.time * 43.0) + Math.sin(r.time * 89.0) * 0.5) / 1.5 * 0.04 * c;
+        }
       }
 
       fg.position.copy(_vPos);
       fg.rotation.copy(_euler);
-      fg.scale.set(...sample.fridge.scale);
+
+      // Swell scale 1 + 0.05*charge (off when reduced)
+      const swell = !r.reduced && sample.charge > 0 ? 1 + 0.05 * sample.charge : 1.0;
+      fg.scale.set(
+        sample.fridge.scale[0] * swell,
+        sample.fridge.scale[1] * swell,
+        sample.fridge.scale[2] * swell
+      );
       fg.updateMatrixWorld();
     }
 
-    // 3. Door pivot rotation
-    if (parts.current.door) {
-      parts.current.door.rotation.y = sample.door;
-    }
-
-    // 4. Interior light
+    // 3. Ember seam light (replaces interior light)
     if (lampRef.current) {
-      lampRef.current.intensity = sample.light * 1.5;
+      lampRef.current.intensity = sample.light * 4;
     }
 
-    // 5. Items trajectory, visibility and floating motion
+    // 4. Items trajectory, visibility and floating motion
     const numItems = itemVisuals.length;
     itemVisuals.forEach(({ item, index, slot, seed }) => {
       const grp = itemGroupRefs.current.get(item.id);
       if (!grp || !fg) return;
 
-      // Staggered launch start within release (0.86 .. 1.0)
-      const itemStagger = numItems > 1 ? (index / (numItems - 1)) * 0.45 : 0;
-      const tLaunch =
-        sample.release <= itemStagger
+      // Tiny stagger <= 0.05 of burst
+      const itemStagger = numItems > 1 ? (index / (numItems - 1)) * 0.05 : 0;
+      const burstPrime =
+        sample.burst <= itemStagger
           ? 0
-          : Math.min(1, (sample.release - itemStagger) / (1 - itemStagger));
+          : Math.min(1, (sample.burst - itemStagger) / (1 - itemStagger));
 
       // Manage original food visibility inside fridge
       const origNode = slot !== undefined ? parts.current.foodNodes.get(slot) : null;
       if (origNode) {
-        // Original node in fridge is visible while inside (tLaunch === 0) and hidden once released
-        origNode.visible = tLaunch === 0;
+        origNode.visible = sample.burst < 0.02 && burstPrime === 0;
       }
 
-      // World-space ejected group visibility
-      if (tLaunch === 0) {
+      if (sample.burst === 0) {
         grp.visible = false;
         return;
       }
@@ -257,26 +299,45 @@ function FridgeWorld({
           : [0, 1.0, 0.45];
       _vOrigin.set(...localSlot).applyMatrix4(fg.matrixWorld);
 
-      // Target anchor in world space
-      const anchor = floatingAnchor(index, numItems, seed);
+      // Target anchor in world space (aspect-aware ellipsoid shell)
+      const anchor = floatingAnchor(index, numItems, seed, aspect);
       _vTarget.set(...anchor);
 
-      // Interpolate with arc
-      _vPos.lerpVectors(_vOrigin, _vTarget, tLaunch);
-      _vPos.y += Math.sin(tLaunch * Math.PI) * 0.35;
+      // Interpolate with easeOutExpo-ish trajectory
+      const easedBurst = r.reduced
+        ? (sample.burst > 0 ? 1 : 0)
+        : (burstPrime === 1 ? 1 : 1 - Math.pow(2, -10 * burstPrime));
 
-      // When fully floating (tLaunch === 1), add slow drift & tumble (off if reduced)
-      if (tLaunch === 1 && !r.reduced) {
-        _vPos.x += Math.sin(r.time * 0.5 + index * 1.3) * 0.04;
-        _vPos.y += Math.sin(r.time * 0.7 + index * 1.1) * 0.05;
-        _vPos.z += Math.cos(r.time * 0.6 + index * 1.5) * 0.04;
+      _vPos.lerpVectors(_vOrigin, _vTarget, easedBurst);
+
+      // Tumble rotation proportional to eased burst (1.5–3 turns, per-item axis from seed)
+      const turns = 1.5 + (seed % 10) * 0.15;
+      const tumbleAngle = easedBurst * turns * Math.PI * 2;
+      const ax = Math.sin(seed * 1.1);
+      const ay = Math.cos(seed * 2.3);
+      const az = Math.sin(seed * 3.7);
+      const aLen = Math.hypot(ax, ay, az) || 1;
+
+      if (!r.reduced) {
         grp.rotation.set(
-          Math.sin(r.time * 0.4 + index) * 0.15,
-          r.time * 0.15 + index * 0.7,
-          Math.cos(r.time * 0.35 + index) * 0.15
+          (ax / aLen) * tumbleAngle,
+          (ay / aLen) * tumbleAngle,
+          (az / aLen) * tumbleAngle
         );
       } else {
         grp.rotation.set(0, 0, 0);
+      }
+
+      // Floating drift faded in by smoothstep(0.9, 1, burst)
+      const driftFactor = Math.min(1, Math.max(0, (sample.burst - 0.9) / 0.1));
+      const driftSmooth = driftFactor * driftFactor * (3 - 2 * driftFactor);
+      if (driftSmooth > 0 && !r.reduced) {
+        _vPos.x += Math.sin(r.time * 0.5 + index * 1.3) * 0.04 * driftSmooth;
+        _vPos.y += Math.sin(r.time * 0.7 + index * 1.1) * 0.05 * driftSmooth;
+        _vPos.z += Math.cos(r.time * 0.6 + index * 1.5) * 0.04 * driftSmooth;
+        grp.rotation.x += Math.sin(r.time * 0.4 + index) * 0.15 * driftSmooth;
+        grp.rotation.y += (r.time * 0.15 + index * 0.7) * driftSmooth;
+        grp.rotation.z += Math.cos(r.time * 0.35 + index) * 0.15 * driftSmooth;
       }
 
       grp.position.copy(_vPos);
@@ -299,8 +360,8 @@ function FridgeWorld({
         <primitive
           object={model}
           onClick={(e) => {
-            e.stopPropagation();
             if (rig.current.progress === 0 && !travel) {
+              e.stopPropagation();
               onTravel();
             }
           }}
@@ -314,14 +375,16 @@ function FridgeWorld({
             onHoverChange(null);
           }}
         />
-        {/* Door spill interior light */}
+        {/* Explosion component (owned by FX, mounted right after primitive) */}
+        <Explosion rig={rig} model={model} />
+        {/* Ember seam point light */}
         <pointLight
           ref={lampRef}
-          position={[0, 1.62, 0.13]}
+          position={[0, 1.0, 0]}
           intensity={0}
-          distance={2.5}
+          distance={3}
           decay={2}
-          color="#e7ffd9"
+          color="#ff8a4c"
         />
       </group>
 

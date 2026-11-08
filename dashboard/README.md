@@ -51,22 +51,26 @@ through `Food_5` carry item indices. The renderer remains lazy-loaded. Vite emit
 WebGL/model errors retain the photograph and inventory access.
 
 `src/spaceJourney.mjs` defines the reversible space journey playhead. A single
-`progress` value (0→1, ~9 s forward, ~4.5 s return) drives the fridge through a
-wormhole portal into a new region of space, opens the door, and ejects items into
-a floating cloud. The camera never enters the fridge interior. `sampleJourney`
-returns camera, fridge, door, portal, tunnel, and item-release poses for every
-progress value and aspect ratio. `advanceJourney` handles forward, reverse,
-background-tab resume, and reduced-motion instant jumps. In dev mode, appending
-`?progress=<0..1>` freezes the playhead at that exact progress for inspection.
+`progress` value (0→1, ~10 s forward, ~5 s return) drives the fridge through a
+wormhole portal via a C1-continuous Hermite camera and fridge dive into folded space,
+settles at the destination quadrant (0.70→0.80), trembles and swells with ember seam
+glow during charge (0.80→0.86), and explodes at 0.86 into metal shards and an aspect-fitted
+3D ellipsoid cloud of floating food items. Returning home reverses the entire sequence
+smoothly. The camera never enters the fridge interior. `sampleJourney` returns camera,
+fridge, portal, tunnel, charge, burst, and seam light states for every progress value
+and aspect ratio. `advanceJourney` handles forward, reverse, background-tab resume,
+and reduced-motion instant jumps. In dev mode, appending `?progress=<0..1>` freezes
+the playhead at that exact progress for inspection.
 
 `src/Fridge3D.jsx` consumes the sample every frame and applies it to the model,
-items, and FX components. Items with demo slot mappings use the GLB food meshes;
+ejected items, and FX components. At burst = 0.02, the cabinet meshes swap cleanly
+behind the fireball for FX shards. Items with demo slot mappings use the GLB food meshes;
 other items get generated geometry. Hover shows a name tag; click opens the item
 detail route. Clicking the fridge at idle triggers the journey.
 
 Run `node tools/checks/space-journey.mjs` for playhead reversal, phase boundaries,
-camera continuity, door timing, item release, aspect-ratio coverage, and
-GLB-structure checks.
+camera speed continuity, non-decreasing dive, fridge portal crossing, charge/burst timing,
+aspect-ratio NDC coverage, and GLB-structure checks.
 
 The editable Blender source and rebuild scripts are in `tools/blender/`.
 Blender must be running with its MCP addon listening on loopback port 9876.
