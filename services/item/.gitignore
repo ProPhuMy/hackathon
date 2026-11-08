@@ -5,3 +5,4 @@ data/clips/
 .mobileclip*
 mobileclip*.ts
 *.part
+config.json

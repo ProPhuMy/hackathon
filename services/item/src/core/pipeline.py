@@ -10,6 +10,7 @@ from .door import DoorDetector
 from ..events import item_event
 from .gallery import ItemGallery
 from .geometry import Track
+from .edge import EdgeSession
 from .session import DoorSession, Trip
 from .shelf import shelf_diff
 
@@ -31,7 +32,7 @@ class ItemPipeline:
         self.segment = segment
         self.shelf_check = shelf_check
         self.door_detector = DoorDetector(roi=cfg.roi, on=cfg.door_on, off=cfg.door_off)
-        self.session: DoorSession | None = None
+        self.session: DoorSession | EdgeSession | None = None
         self.tracks: list[Track] = []
         self.door_open: bool = False
         self._shelf_before: list[Track] | None = None
@@ -42,7 +43,9 @@ class ItemPipeline:
         self._emitted_take_labels: set[str] = set()
 
     def process(self, frame: np.ndarray, ts: str) -> list[dict]:
-        is_open = self.door_detector.update(frame)
+        edge = self.cfg.mode == "edge"
+        # Edge mode has no door gate: from on top, opening can brighten or darken the view (measured).
+        is_open = True if edge else self.door_detector.update(frame)
         self.door_open = is_open
 
         if not is_open:
@@ -50,7 +53,7 @@ class ItemPipeline:
             return self.close()
 
         if self.session is None:
-            self.session = DoorSession(self.cfg.line)
+            self.session = EdgeSession(self.cfg.line) if edge else DoorSession(self.cfg.line)
             self._reset_session_state()
 
         tracks = self.detect(frame)

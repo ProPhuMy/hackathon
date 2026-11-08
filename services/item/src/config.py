@@ -25,6 +25,9 @@ class Config:
     door_off: float
     prompts: list[str] = field(default_factory=lambda: list(DEFAULT_PROMPTS))
     hand_label: str = "hand"
+    # "crossing": hands crossing the door line, gated by door brightness (camera sees the opening).
+    # "edge": items vanishing past / appearing at the line, no door gating (camera on top, looking down the front).
+    mode: str = "crossing"
 
 
 def save(cfg: Config, path: Path | str) -> None:
@@ -42,6 +45,7 @@ def save(cfg: Config, path: Path | str) -> None:
         "door_off": cfg.door_off,
         "prompts": cfg.prompts,
         "hand_label": cfg.hand_label,
+        "mode": cfg.mode,
     }
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
@@ -62,6 +66,9 @@ def load(path: Path | str) -> Config:
     door_off = float(data["door_off"])
     prompts = list(data.get("prompts", DEFAULT_PROMPTS))
     hand_label = str(data.get("hand_label", "hand"))
+    mode = str(data.get("mode", "crossing"))
+    if mode not in ("crossing", "edge"):
+        raise ValueError(f"Unknown mode {mode!r}: use 'crossing' or 'edge'")
     return Config(
         roi=roi,
         line=line,
@@ -69,4 +76,5 @@ def load(path: Path | str) -> Config:
         door_off=door_off,
         prompts=prompts,
         hand_label=hand_label,
+        mode=mode,
     )

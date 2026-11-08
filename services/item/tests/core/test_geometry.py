@@ -229,3 +229,10 @@ def test_held_item_mask_missing_fallback():
     masks = {item2.id: mask2}
     picked = held_item(hand, [item1, item2], masks=masks)
     assert picked == item1
+
+
+def test_depth_is_signed_distance_toward_inside():
+    from src.core.geometry import DoorLine
+    line = DoorLine(p1=(0.0, 100.0), p2=(200.0, 100.0), inside=(100.0, 200.0))
+    assert line.depth((50.0, 130.0)) == 30.0
+    assert line.depth((50.0, 60.0)) == -40.0

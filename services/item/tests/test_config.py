@@ -58,3 +58,13 @@ def test_load_default_margin_and_prompts(tmp_path: Path):
     assert loaded.line.margin == 15.0
     assert loaded.prompts == DEFAULT_PROMPTS
     assert loaded.hand_label == "hand"
+
+
+def test_config_mode_roundtrip_and_default(tmp_path: Path):
+    from dataclasses import replace
+    from src.config import Config, load, save
+    from src.core.geometry import DoorLine
+    cfg = Config(roi=(0, 0, 1, 1), line=DoorLine((0.0, 0.0), (1.0, 0.0), (0.0, 1.0)), door_on=1.0, door_off=0.0)
+    assert cfg.mode == "crossing"
+    save(replace(cfg, mode="edge"), tmp_path / "c.json")
+    assert load(tmp_path / "c.json").mode == "edge"
