@@ -2,11 +2,11 @@ import json
 from types import SimpleNamespace
 import numpy as np
 import pytest
-from fridge_person.main import check_camera
+from src.main import check_camera
 
 
 def test_live_check_outputs_only_aggregate_diagnostics(monkeypatch, capsys):
-    from fridge_person import capture, vision, main
+    from src import capture, vision, main
     class Vision:
         def __init__(self, *args):
             pass

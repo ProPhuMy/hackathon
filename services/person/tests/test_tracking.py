@@ -1,10 +1,10 @@
 import numpy as np
 import pytest
-from fridge_person.recognition import unit
+from src.recognition import unit
 
 
 def test_kalman_box_tracker_prediction_and_update():
-    from fridge_person.tracking import KalmanBoxTracker
+    from src.tracking import KalmanBoxTracker
     tracker = KalmanBoxTracker([10., 10., 50., 50.])
     pred1 = tracker.predict(dt=0.1)
     assert len(pred1) == 4
@@ -19,7 +19,7 @@ def test_kalman_box_tracker_prediction_and_update():
 
 
 def test_face_track_evidence_and_appearance_continuity():
-    from fridge_person.tracking import FaceTrack
+    from src.tracking import FaceTrack
     track = FaceTrack(track_id=1, initial_box=[0., 0., 100., 100.], segment_id=10)
     
     vec1 = unit([1., 0., 0.] + [0.] * 509)
@@ -61,7 +61,7 @@ def test_face_track_evidence_and_appearance_continuity():
 
 
 def test_face_tracker_multi_person_association():
-    from fridge_person.tracking import FaceTracker
+    from src.tracking import FaceTracker
     tracker = FaceTracker()
     
     v_alice = unit([1., 0.] + [0.] * 510)

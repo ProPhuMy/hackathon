@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from fridge_person.calibration import fit_baseline, measure
+from src.calibration import fit_baseline, measure
 
 
 def encounter(person, vector):

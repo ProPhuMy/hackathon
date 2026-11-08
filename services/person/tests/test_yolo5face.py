@@ -6,10 +6,10 @@ import numpy as np
 import onnxruntime as ort
 import pytest
 
-from fridge_person.detection import FaceDetection, fuse_faces
-from fridge_person.yolo5face import YOLO5Face, letterbox, nms
-import fridge_person.yolo5face as yolo5face_module
-import fridge_person.main as main_module
+from src.detection import FaceDetection, fuse_faces
+from src.yolo5face import YOLO5Face, letterbox, nms
+import src.yolo5face as yolo5face_module
+import src.main as main_module
 
 
 class MockTensorInfo:

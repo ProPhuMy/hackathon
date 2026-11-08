@@ -2,8 +2,8 @@ from datetime import datetime, timezone
 import cv2
 import numpy as np
 import pytest
-from fridge_person.capture import Capture, source_value
-from fridge_person.runtime import segment_id
+from src.capture import Capture, source_value
+from src.runtime import segment_id
 
 
 def test_source_parsing_and_missing_replay_origin(tmp_path):
@@ -39,7 +39,7 @@ def test_segment_ids_survive_restarts(tmp_path):
 
 def test_live_reconnect_yields_reset_boundary_and_drops_old_queue(monkeypatch):
     import queue
-    from fridge_person import capture as module
+    from src import capture as module
     scripts = iter([[('error', 'disconnected')], [('frame', ('new-frame', 3., 'new-ts')), ('end', None)]])
     closed = []
     def start(self):
@@ -58,7 +58,7 @@ def test_live_reconnect_yields_reset_boundary_and_drops_old_queue(monkeypatch):
 
 def test_reconnect_attempts_are_bounded(monkeypatch):
     import queue
-    from fridge_person import capture as module
+    from src import capture as module
     starts = []
     def start(self):
         starts.append(True)

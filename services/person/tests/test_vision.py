@@ -1,5 +1,5 @@
 import numpy as np
-from fridge_person.vision import Vision
+from src.vision import Vision
 
 
 def fixture():

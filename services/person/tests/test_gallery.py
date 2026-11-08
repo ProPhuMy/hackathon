@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from fridge_person.gallery import Gallery
+from src.gallery import Gallery
 
 
 def test_gallery_roundtrip_model_binding_and_deliberate_removal(tmp_path):
@@ -40,7 +40,7 @@ def test_gallery_fingerprint_stays_stable_for_real_dimension_vectors(tmp_path):
 
 
 def test_dual_gallery_enrollment_scoring_and_removal(tmp_path):
-    from fridge_person.gallery import DualGallery
+    from src.gallery import DualGallery
     arc_path = tmp_path / 'arcface.json'
     ada_path = tmp_path / 'adaface.json'
     g_arc = Gallery(arc_path, 'arc-v1')
