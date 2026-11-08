@@ -1,5 +1,5 @@
 import numpy as np
-from src.vision import Vision
+from src.vision.arcface import Vision
 
 
 def fixture():

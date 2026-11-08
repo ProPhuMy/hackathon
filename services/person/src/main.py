@@ -68,7 +68,7 @@ def check_camera(args):
         raise ValueError('Camera check duration must be finite and positive')
     import numpy as np
     from .capture import Capture
-    from .vision import Vision
+    from .vision.arcface import Vision
     vision = Vision(args.detector, args.recognizer)
     report = dict(decoded_frames=0, usable_single_face_frames=0, stale_frames=0, reconnects=0)
     timings = []
@@ -102,8 +102,8 @@ def check_encoders(args):
     import cv2
     import numpy as np
     import resource
-    from .vision import Vision
-    from .encoders import FaceEncoders
+    from .vision.arcface import Vision
+    from .vision.encoders import FaceEncoders
     if not args.image.is_file():
         raise ValueError('Missing local test image')
     image = cv2.imread(str(args.image))
@@ -142,8 +142,8 @@ def check_detectors(args):
     import numpy as np
     import onnxruntime as ort
     from insightface.model_zoo import get_model
-    from .detection import FaceDetection, _iou, fuse_faces, _valid_points
-    from .yolo5face import YOLO5Face
+    from .vision.detection import FaceDetection, _iou, fuse_faces, _valid_points
+    from .vision.yolo5face import YOLO5Face
 
     scrfd_path = args.scrfd or args.detector
     for path, name in ((args.image, 'image'), (scrfd_path, 'SCRFD model'), (args.yolo5face, 'YOLO5Face model')):
@@ -318,12 +318,12 @@ def main():
         elif args.command == 'check-detectors':
             check_detectors(args)
         elif args.command in ('calibrate-scores', 'evaluate-scores'):
-            from .ensemble import execute
+            from .identity.ensemble import execute
             execute(args)
         elif args.command == 'check-camera':
             check_camera(args)
         elif args.command in ('calibrate', 'evaluate'):
-            from .dataset import execute
+            from .evaluation.dataset import execute
             execute(args)
         else:
             from .runtime import execute

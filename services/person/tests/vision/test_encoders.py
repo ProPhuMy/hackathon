@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 import torch
-from src.encoders import adaface_input, magface_input, load_checkpoint, quality_weight
-from src.backbones import AdaFaceIR50, MagFaceIR50
+from src.vision.encoders import adaface_input, magface_input, load_checkpoint, quality_weight
+from src.vision.backbones import AdaFaceIR50, MagFaceIR50
 
 
 def test_checkpoint_specific_input_preprocessing_preserves_bgr():
@@ -71,7 +71,7 @@ def test_offline_encoder_check_reports_no_embeddings(tmp_path, monkeypatch, caps
     from types import SimpleNamespace
     import importlib
     main = importlib.import_module('src.main')
-    from src import vision, encoders
+    from src.vision import arcface as vision, encoders
     class Vision:
         def __init__(self, *args):
             pass

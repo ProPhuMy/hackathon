@@ -37,7 +37,7 @@ import numpy as np
 import onnxruntime as ort
 
 from .detection import FaceDetection, _valid_points
-from .storage import file_hash
+from ..storage import file_hash
 
 
 def letterbox(image, target_size=(640, 640), color=(114, 114, 114)):

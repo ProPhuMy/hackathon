@@ -7,7 +7,7 @@ import re
 import uuid
 import numpy as np
 from .recognition import unit
-from .storage import atomic_json
+from ..storage import atomic_json
 
 
 class Gallery:

@@ -1,6 +1,6 @@
 import hashlib
 import pytest
-from src.ensemble import fit_policy, evaluate, predict, candidate_set
+from src.identity.ensemble import fit_policy, evaluate, predict, candidate_set
 
 
 def row(session, person, arc, ada):
@@ -91,7 +91,7 @@ def test_one_person_gallery_needs_no_fabricated_runner_up():
 def test_json_artifacts_roundtrip_through_cli_handler(tmp_path, capsys):
     import json
     from types import SimpleNamespace
-    from src.ensemble import execute
+    from src.identity.ensemble import execute
     paths = {}
     for split in ('dev', 'conformal', 'test'):
         path = tmp_path / f'{split}.json'

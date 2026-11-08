@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from src.calibration import fit_baseline, measure
+from src.evaluation.calibration import fit_baseline, measure
 
 
 def encounter(person, vector):

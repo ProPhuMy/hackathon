@@ -4,8 +4,8 @@ import cv2
 import numpy as np
 from insightface.model_zoo import get_model
 from insightface.utils.face_align import norm_crop
-from .recognition import unit
-from .storage import file_hash
+from ..identity.recognition import unit
+from ..storage import file_hash
 
 
 class Vision:

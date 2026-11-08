@@ -6,7 +6,8 @@ from src.main import check_camera
 
 
 def test_live_check_outputs_only_aggregate_diagnostics(monkeypatch, capsys):
-    from src import capture, vision, main
+    from src import capture, main
+    from src.vision import arcface as vision
     class Vision:
         def __init__(self, *args):
             pass

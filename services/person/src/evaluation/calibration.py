@@ -1,7 +1,7 @@
 """Empirical ArcFace baseline tuning; no ensemble or conformal claims."""
 import itertools
 import numpy as np
-from .recognition import Baseline
+from ..identity.recognition import Baseline
 
 
 def measure(encounters, scores, policy):

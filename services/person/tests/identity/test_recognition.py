@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from src.recognition import Evidence, decision
+from src.identity.recognition import Evidence, decision
 
 
 def test_evidence_requires_count_span_and_resets_on_contradiction():
@@ -36,7 +36,7 @@ def test_invalid_policy_and_vectors_are_rejected():
 
 
 def test_baseline_resets_on_ambiguity_and_new_identity():
-    from src.recognition import Baseline
+    from src.identity.recognition import Baseline
     policy = dict(accept=.8, reject=.2, margin=.1)
     engine = Baseline(lambda v: {'a': float(v[0]), 'b': float(v[1])}, policy)
     x = np.array([1., 0.])

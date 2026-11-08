@@ -3,7 +3,7 @@ import csv
 import math
 from pathlib import Path
 import cv2
-from .storage import atomic_json, file_hash
+from ..storage import atomic_json, file_hash
 
 
 def read_manifest(path, split):
@@ -75,8 +75,8 @@ def observations(row, vision):
 def execute(args):
     import json
     from .calibration import fit_baseline, measure
-    from .gallery import Gallery
-    from .vision import Vision
+    from ..identity.gallery import Gallery
+    from ..vision.arcface import Vision
     vision = Vision(args.detector, args.recognizer)
     gallery = Gallery(args.gallery, vision.signature)
     if not gallery.people:

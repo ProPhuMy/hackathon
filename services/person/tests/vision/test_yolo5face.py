@@ -6,9 +6,9 @@ import numpy as np
 import onnxruntime as ort
 import pytest
 
-from src.detection import FaceDetection, fuse_faces
-from src.yolo5face import YOLO5Face, letterbox, nms
-import src.yolo5face as yolo5face_module
+from src.vision.detection import FaceDetection, fuse_faces
+from src.vision.yolo5face import YOLO5Face, letterbox, nms
+import src.vision.yolo5face as yolo5face_module
 import src.main as main_module
 
 

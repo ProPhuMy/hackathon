@@ -212,7 +212,7 @@ def evaluate(policy, data):
 
 def execute(args):
     import json
-    from .storage import atomic_json
+    from ..storage import atomic_json
     if args.command == 'calibrate-scores':
         development = json.loads(args.development.read_text())
         conformal = json.loads(args.conformal.read_text())

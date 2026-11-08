@@ -6,9 +6,9 @@ import time
 from jsonschema import Draft202012Validator
 from .capture import Capture
 from .events import person_seen
-from .gallery import Gallery
-from .recognition import Baseline, decision
-from .vision import Vision
+from .identity.gallery import Gallery
+from .identity.recognition import Baseline, decision
+from .vision.arcface import Vision
 from .storage import file_hash, segment_id
 
 
@@ -39,7 +39,7 @@ def execute(args):
         
         is_ensemble = 'conformal' in policy
         if is_ensemble:
-            from .ensemble import predict
+            from .identity.ensemble import predict
             ada_arg = getattr(args, 'ada_gallery', None)
             if ada_arg and Path(ada_arg).is_file():
                 ada_gallery = Gallery(ada_arg, json.loads(Path(ada_arg).read_text())['model'])
@@ -55,7 +55,7 @@ def execute(args):
                     self.g_arc = g_arc
                     self.g_ada = g_ada
                     self.policy = pol
-                    from .recognition import Evidence
+                    from .identity.recognition import Evidence
                     self.evidence = Evidence()
                     self.accepted = None
                     self.generation = 0

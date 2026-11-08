@@ -1,5 +1,5 @@
 import pytest
-from src.dataset import read_manifest, verify_disjoint
+from src.evaluation.dataset import read_manifest, verify_disjoint
 
 
 def test_manifest_resolves_paths_and_checks_split(tmp_path):
@@ -32,8 +32,9 @@ def test_calibrate_and_evaluate_video_manifests_end_to_end(tmp_path, monkeypatch
     from types import SimpleNamespace
     import cv2
     import numpy as np
-    from src import dataset, vision
-    from src.gallery import Gallery
+    from src.evaluation import dataset
+    from src.vision import arcface as vision
+    from src.identity.gallery import Gallery
     class Vision:
         signature = 'synthetic-model'
         def __init__(self, *args):

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 from src import runtime
-from src.gallery import Gallery
+from src.identity.gallery import Gallery
 
 
 def setup_runtime(tmp_path, monkeypatch, frames, command='run'):
@@ -126,7 +126,7 @@ def test_reconnect_boundary_requires_fresh_evidence_and_segment(tmp_path, monkey
 
 
 def test_ensemble_runtime_conformal_decision_and_dispatch(tmp_path, monkeypatch, capsys):
-    from src.gallery import Gallery
+    from src.identity.gallery import Gallery
     class Vision:
         signature = 'test-model'
         def __init__(self, *args):

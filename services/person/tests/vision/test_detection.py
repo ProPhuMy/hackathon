@@ -1,5 +1,5 @@
 import numpy as np
-from src.detection import FaceDetection, fuse_faces
+from src.vision.detection import FaceDetection, fuse_faces
 
 
 def face(box, confidence=.9, points=None):
@@ -48,7 +48,7 @@ def test_ties_prefer_scrfd_and_empty_frames_are_valid():
 
 
 def test_ambiguous_source_landmarks_are_withheld(monkeypatch):
-    from src import detection
+    from src.vision import detection
     monkeypatch.setattr(detection, 'weighted_boxes_fusion', lambda *args, **kwargs:
                         (np.array([[.1, .1, .6, .6], [.2, .1, .7, .6]]), [.9, .9], [0, 0]))
     points = np.array([[25, 20], [45, 20], [35, 30], [27, 40], [43, 40]], dtype=float)

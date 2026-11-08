@@ -3,7 +3,7 @@ from collections import deque
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 from .recognition import unit
-from .detection import _iou
+from ..vision.detection import _iou
 
 
 class KalmanBoxTracker:

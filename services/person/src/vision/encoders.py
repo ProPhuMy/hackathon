@@ -4,8 +4,8 @@ from pathlib import Path
 import numpy as np
 import torch
 from .backbones import AdaFaceIR50, MagFaceIR50
-from .recognition import unit
-from .storage import file_hash
+from ..identity.recognition import unit
+from ..storage import file_hash
 
 
 class _LegacyCheckpointMetadata:
