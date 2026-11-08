@@ -38,14 +38,15 @@ TanStack Router now owns `/`, `/inventory`, `/history`, `/alerts`, `/people`,
 fridge scene while panels follow the URL, including direct links and back/forward.
 Run `node tools/checks/routes.mjs` for the focused route checks.
 
-`src/Fridge3D.jsx` renders `public/models/mini-fridge.glb` with React Three Fiber.
+`src/Fridge3D.jsx` renders `src/assets/mini-fridge.glb` with React Three Fiber.
 The model was authored through the community MCP for Blender server. Its
 53 nodes contain roughly 99,000 modeled polygons, merged by material and parent
 for fewer draw calls. Details include folded satin-metal panels, a recessed grip,
 layered seals, glass shelves, a crisper drawer, a freezer flap, vents, thermostat,
 LED strips, and six separately selectable food groups with printed packaging.
 The self-contained GLB is about 6.3 MB. `DoorPivot` owns the door and `Food_0`
-through `Food_5` carry item indices. The renderer remains lazy-loaded.
+through `Food_5` carry item indices. The renderer remains lazy-loaded. Vite emits a content-hashed model URL;
+`node tools/checks/model-asset.mjs` verifies the production artifact after a build.
 WebGL/model errors retain the photograph and inventory access.
 
 `src/fridgeMotion.mjs` defines the reversible camera path. The door clears before

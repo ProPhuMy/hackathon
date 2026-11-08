@@ -226,3 +226,28 @@ continuation:191 passed with live isolatedPostgres. Person/item runtime validati
 is still pending. Baseline independent QA evidence is in
 reviews/qa-baseline-continuation.md; it is not final live-integration sign-off.
 See next-session.md for the stopped worker runs and exact resumption sequence.
+
+
+## Dashboard branch wrap-up — 2026-11-07
+
+User required continued work on dashboard instead of main. Created dashboard
+from88bcbab; documented branch and agy plan/review/code policy in AGENTS.md.
+Diagnosed missing native editing tools in custom roles and declared verified
+read_file/write_file/edit_file/run_command capabilities for editing workers.
+
+Accepted modeler release patch: same-byte GLB moved to src/assets, Vite ?url
+content hashing, updated Blender exporter/model assertions, and strengthened
+single-artifact/hash-change checks. Lead reran build, lint, motion, routes,
+mapping and model-asset successfully. Known lazy3D chunk warning remains.
+
+Integrator produced a live-data/container candidate, but lead REJECTED acceptance:
+StrictMode leaves live initialization stuck; bounded requests/reconnect truth and
+record validation need revision; actual Nginx startup fails env substitution;
+production tests exercise a substitute Node server rather than Nginx. UI/UX found
+narrow-mobile interior overlap and misleading technical/status copy. Detailed
+reviews and screenshots are saved. Candidate is preserved ONLY on local branch
+dashboard-live-wip at2ce1222, not integrated or published.
+
+Work stopped at user's wrap-up request. No agents remain running. Infrastructure
+and video are not started. See next-session.md for prioritized owners, dependencies,
+definitions of done, runtime cleanup and exact resumption steps.

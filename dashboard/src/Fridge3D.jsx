@@ -2,6 +2,7 @@ import { Component, Suspense, useEffect, useMemo, useRef, useState } from 'react
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Environment, Lightformer, useGLTF } from '@react-three/drei'
 import { MathUtils } from 'three'
+import fridgeGlbUrl from './assets/mini-fridge.glb?url'
 import { advanceJourney, sampleJourney, SHELVES, canPickItem } from './fridgeMotion.mjs'
 
 function itemIndex(object) {
@@ -12,7 +13,7 @@ function itemIndex(object) {
 }
 
 function FridgeWorld({ enter, shelf, onEnter, onInspect, onPhase, onReady, onHover }) {
-  const { scene } = useGLTF('/models/mini-fridge.glb?v=3')
+  const { scene } = useGLTF(fridgeGlbUrl)
   const model = useMemo(() => scene.clone(true), [scene])
   const rig = useRef({ progress: 0, height: SHELVES[0].height, reduced: false, phase: 'outside', hover: null })
   const lamp = useRef(null)

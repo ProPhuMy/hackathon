@@ -1,180 +1,86 @@
-# Main synchronization checkpoint — 2026-11-07
+# Resume checkpoint — dashboard branch
 
-User requested fetching latest main, merging locally and pushing before further
-implementation. Original checkout was already on main. Fetched origin/main at
-007f6a4 (includes person/item work and Phong backend PR), merged cleanly with
-local history, and preserved all97 pending files byte-for-byte through merge.
-The reviewed dashboard, model source/assets, references and review evidence are
-being committed together. No unfinished worker patch was copied into the app.
+Saved at user request to summarize and wrap up on2026-11-07 (local time).
+No agents remain running. This is a persistent handoff, not an automatic retry.
 
-Verification after merge: npm run build, npm run lint, motion/model, all7 route
-checks and mapping checks PASS. Known large lazy3D chunk warning remains.
-The unchanged backend previously passed all191 tests using isolatedPostgres15432;
-newly fetched person/item model pipelines have not been runtime-validated here.
-Git whitespace check identifies two preexisting blank lines with trailing spaces
-(App.css:158 and App.jsx:77); no behavioral failure. Credentials stay ignored.
+## Branches and workflow
 
-Workers are stopped. The resumed integrator conversation retained a read-only
-planning toolset and returned proposed code in text, not accepted source edits;
-its output also ended in a stream interruption. Modeler planning ended with a
-provider connection reset. Resume with a fresh accept-edits coding conversation
-and the reviewed detailed brief, verify actual write tools/diffs, and do not treat
-text-only code or earlier worker claims as implementation.
+- Main was synchronized and pushed at88bcbab earlier. Further development is on
+  **dashboard**, as the project overview requires. Do not implement on main.
+- **dashboard-live-wip**, local commit **2ce1222**, preserves the UNACCEPTED agy
+  live-data/serving candidate. It is not merged into dashboard or published.
+  Do not apply it without fixing the findings below. The branch survives cleanup
+  of temporary worktrees; its files can be recovered with Git.
+- agy writes implementation code: detailed brief → worker plan → lead review →
+  worker implementation → actual diff/check/browser review. At most two workers.
+- Dashboard acceptance comes first, then infrastructure. Video waits until the
+  project is complete. Do not resume coding until the user asks to continue.
 
-Next: re-read new person/item setup and backend contracts; recreate worker
-checkouts from updated main; finish agy live integration and asset release work
-under docs/briefs and docs/reviews/dashboard-plan-review.md, then independent
-combined-preview QA. Only after dashboard acceptance proceed to infra/k8s.
-Video remains deferred until project completion. User's agy plan → lead review →
-agy code → lead review workflow remains in force. Below is historical context.
+## Accepted and verified
 
----
+- Existing interactive fridge/demo, responsive controls, route panels, stable demo
+  slot mapping, focus return, reversible3.8s journey and static fallback preserved.
+- Model now lives at src/assets/mini-fridge.glb and uses Vite content-hashed delivery.
+  Blender exporter and model checks use that path. GLB and .blend bytes unchanged.
+- Explicit native tools in editing-worker role definitions fix agy's missing
+  write/terminal tools. See reviews/worker-tooling.md for verified configuration.
+- Final accepted-branch gates PASS: npm run build; npm run lint;
+  node tools/checks/fridge-motion.mjs; routes.mjs; mapping.mjs; model-asset.mjs.
+  Build still warns about the approximately1.05MB minified lazy3D chunk.
+- Phong backend previously passed191 tests including isolated livePostgres tests.
+  Fake-event PUT→TAKE→mismatch alert was verified through real Kafka, Postgres,
+  API and SSE. This is not camera-based end-to-end validation.
+- Independent baseline QA completed with explicit coverage gaps; UI/UX reviewed
+  the live candidate. Final independent combined-preview sign-off remains pending.
 
-# Active continuation — dashboard then infrastructure
+## Next assignments in priority order
 
-Updated 2026-11-07. This section supersedes older queue/provider notes below.
-User requires agy to write implementation: detailed brief → agy plan → lead
-review → agy code → lead diff/check/browser review. Complete dashboard first,
-then infra/k8s. Video waits until project completion. Current signed-in agy
-provider is usable; do not assume the old Gemini API daily quota still blocks it.
-
-- Phong pushed origin/phong commit619d1ed. Lead fetched and merged it cleanly;
-  divergent documentation history required a merge commit, with no conflicts.
-  All 80 previously snapshotted pending dashboard files remained byte-identical.
-- Backend checks: uv run pytest -q →188 passed,3 skipped,2 deprecation warnings.
-  API inventory/events/alerts/people/SSE and person metadata registration now
-  exist. Enrollment remains unknown; no auth or dynamic model placement contract.
-- Active: frontend-integrator read-only revised plan against real backend;
-  visual-qa independent baseline review at http://127.0.0.1:5176/.
-- Detailed briefs: docs/briefs/dashboard-completion.md and backend-integration.md.
-- Temporary worktrees/raw results: /private/tmp/fridge-ship-2wgggr96. No product
-  code accepted in this continuation yet. Preserve pending original work.
-- Docker Desktop was started for subsequent production serving verification.
-  No infrastructure deployment has begun. k3d/helm not on PATH, kubectl has no
-  current context. Root shared compose is unchanged.
-
-Next: review agy integration plan before authorizing code; use same-origin proxy,
-truthful live/demo state, stable backend IDs, SSE invalidation and metadata-only
-registration. Validate production serving and independent combined preview,
-then brief and plan infra/k8s. Do not call dashboard/live-system finished until
-these gates have evidence. Save latest status here when stopping.
-
----
-
-# Next-session checkpoint — Fridge Tracker
-
-Saved: 2026-11-07, after the coordinated Antigravity pass.
-Purpose: resume the unfinished work without repeating accepted implementation.
-This is a persistent handoff, not a scheduled task or an automatic retry.
-
-## Current state to preserve
-
-- Accepted changes are in the original dashboard checkout, still uncommitted.
-  Preserve all pending work; HEAD alone does not contain the finished dashboard.
-- Implemented: responsive portrait/short-landscape layout, 44px touch-sized shelf
-  controls, selected-shelf mesh/hover guards, stable demo-ID mapping, dialog
-  opener focus restoration across StrictMode, and PATH-based uvx resolution.
-- Original 3.8-second reversible camera path and GLB/.blend assets are unchanged.
-- Build, lint, motion/model, route and mapping checks passed. Lead Chrome checks
-  passed at 1440×900, 390×844, 320×568 and 844×390, including touch contexts,
-  focus, picking, wheel, reduced motion and forced model/WebGL fallback.
-- Independent baseline QA completed. Independent **combined-preview QA did not**:
-  Gemini returned HTTP 429 at its daily gemini-3.1-pro request quota. The retry
-  estimate recorded then was about five hours; recheck availability next session
-  rather than treating that old estimate as current.
-- Last accepted preview: http://127.0.0.1:5176/. Confirm it is serving this checkout
-  or start Vite and use its printed URL. Worker previews at 5177/4173 were stopped.
-- No commit, publication or deployment was performed.
-
-## First actions on return
-
-1. Read `AGENTS.md`, `README.md`, this checkpoint, `docs/implementation-log.md`,
-   `docs/team-dispatch.md` and `docs/reviews/integrated-qa.md`.
-2. Inspect current Git status and source changes. Compare relevant files with
-   `docs/reviews/evidence/final-source-hashes.json`; newer user changes take
-   precedence. Re-run affected checks when the source has changed.
-3. Restore a working preview. Prioritize QA-2 below once Gemini quota is available.
-   Do not replay completed UX-1, MOD-1, MOT-1 or INT-1 by default.
-4. Dispatch at most two independent assignments. Editing workers need separate
-   checkouts containing the current pending dashboard work; never start from HEAD
-   alone. Review actual diffs and screenshot files before accepting worker claims.
-5. Update this checkpoint and the implementation log with new evidence, decisions,
-   blockers and the next action when work stops.
-
-The previous team's `/private/tmp/fridge-team-20261107-2128/` contains snapshots,
-briefs and raw responses but may disappear. The repository documentation and
-`docs/reviews/evidence/` are the durable handoff; recreate temporary checkouts if
-needed. Never copy credential files into them.
-
-Antigravity dispatch uses `agy --settings '{"modelProvider":"gemini"}' --agent
-<role>` with the appropriate mode and scoped tool permissions. The previous
-session's inherited environment lacked GEMINI_API_KEY. The user authorized
-`dashboard/.env`, which names the credential ANTIGRAVITY_KEY; the launcher mapped
-it into GEMINI_API_KEY for worker processes only. Parse that file safely if still
-needed; do not assume it is shell-sourceable or print the credential.
-
-## Pending work, owners and completion gates
-
-| Priority / status | Owner | Next action and files/artifacts | Done when |
+| Owner | Work / dependency | Owned files or artifacts | Definition of done |
 | --- | --- | --- | --- |
-| P0 — blocked on provider quota | `visual-qa` | Retry QA-2 on the combined preview; update `docs/reviews/integrated-qa.md` and save fresh evidence | Independent report covers the full brief below, with actual screenshots, pass/fail/untested cases and reviewed findings |
-| P1 — needs devices/tools | `visual-qa`, with `motion-engineer` / `3d-modeler` for findings | Real Safari, iOS/Android, older hardware, physical touch and performance measurements | Device/browser/cache conditions, FPS/frame timing, draw calls, cold load and available GPU-memory data recorded; unsupported metrics remain explicit gaps |
-| P1 — addon responsiveness blocked | `3d-modeler` | Diagnose loopback Blender addon on 9876; `tools/blender/` and a dedicated project scene only | Read-only `--verify` completes; then prove rebuild/render reproducibility without altering unrelated Blender work. The last attempt timed out in addon handshake after 180 seconds |
-| P1 — teammate/API dependencies | `frontend-integrator` + Phong; Dang for shared contracts; Viet for enrollment | Reinspect backend progress, agree HTTP/SSE, inventory/person schemas, server IDs, authentication, reconnect/error behavior and enrollment/persistence | Agreed contracts exist and integration tests cover live flows. Until then retain clearly labeled demo data; do not invent endpoints or server IDs |
-| P2 — follows agreed ID contract | `frontend-integrator` + `3d-modeler` | Evolve `src/itemMapping.js`, model metadata and shelf placement for dynamic data | Stable server IDs work across meshes/buttons; missing/new items have agreed behavior. The current demo adapter is complete, but GLB still has legacy itemIndex metadata |
-| P2 — conditional on measured need | `3d-modeler` + `motion-engineer`, direction from `ui-ux-designer` | Consider compression/LOD, materials, lighting or framing only from device findings | Measured improvement with preserved packaging legibility, picking, door clearance and same-device before/after evidence; no speculative asset growth |
-| P2 — queued release work | `frontend-integrator` + lead | Choose hosting/history fallback, replace manual `?v=3` with content-based asset versioning, document release setup | Built deployment serves all deep links, updates model caches correctly and passes release checks; actual commit/deployment follows the user's release instruction |
-| P2 — waits for QA-2 sign-off | `ui-ux-designer` + lead | Capture approved exterior, opening, all shelves, item dialog, exit and fallback; synchronize final Figma/FigJam handoff | Approved states, responsive behavior and timing are documented in the design handoff |
+| frontend-integrator | Revise local2ce1222 against accepted dashboard/model baseline | App.jsx/App.css, api.js, fridgeController.js, useFridgeData.js, demoData.js, itemMapping.js, focused checks | Fix StrictMode disposal/reuse that leaves initializing forever; bound snapshot/registration requests; truthful reconnect/error/loading states; reject malformed records; stable IDs and metadata-only registration; meaningful regression checks |
+| ui-ux-designer → frontend-integrator | Apply reviewed live-state handoff after lifecycle fix | reviews/live-ux-handoff.md, live layout/copy in App | No interior overlap at320×568; clear retry status; readable registration and truthful unknown enrollment; no backend jargon; preserve accepted demo layouts |
+| frontend-integrator | Replace invalid production proof and repair actual serving | Dockerfile, nginx.conf.template, .dockerignore, production-serving.mjs, README | Actual built nonroot Nginx starts; env substitution works; real HTTP deep links/cache/static404/API/SSE pass. Current test mimics Nginx with a Node server and is REJECTED. No dummy model inserted into dist |
+| visual-qa | Depends on reviewed combined candidate | integrated preview and fresh screenshot/report evidence | Independent desktop,390×844,320×568,844×390; demo/live modes; keyboard/touch/focus/interruptions; realID routes; registration/reload/409; SSE reconnect; reduced motion; model/WebGL fallbacks; status and data agree |
+| motion-engineer | Only if combined QA identifies a motion/input regression | fridgeMotion.mjs/Fridge3D.jsx and targeted evidence | Reproduced failure fixed without unrelated timing changes; existing motion and picking checks plus browser reproduction pass |
+| 3d-modeler | Asset release COMPLETE; remaining device/addon work depends on tools/hardware | tools/blender, model performance evidence | Responsive Blender addon permits read-only verification/rebuild proof; real-device profiling drives any LOD/material changes. Do not rebuild merely to resume this task |
+| frontend-integrator (infrastructure role) + visual-qa | Starts after dashboard acceptance; latest teammate contracts available | infra/k8s only, infrastructure plan/runbook/evidence | Reviewed agy plan, then reproducible local k3d deployment and verification; stage one-node flow before3-broker resilience/KEDA/observability. Keep backend singleton unless Phong supplies safe scaling contract |
 
-Backend observation from this pass: only the event builder and contract test were
-present, not HTTP inventory/people endpoints or an SSE server. Recheck this later;
-other teammates may have progressed. Respect `contracts/fridge.event.schema.json`
-and the root ownership table; dashboard workers do not edit sibling services or
-shared contracts.
+Exact mandatory code/serving findings and reproduction notes:
+[reviews/live-integration-revisions.md](reviews/live-integration-revisions.md).
+UI evidence and lead corrections:
+[reviews/live-ux-handoff.md](reviews/live-ux-handoff.md).
 
-## Durable QA-2 brief
+Important serving failures: NGINX_ENVSUBST_FILTER used space-separated names,
+so actual nginx -t failed “unknown backend_host variable”; generic extension
+routing would break real IDs ending .png while /missing.js falls back to HTML.
+The candidate's passing synthetic server test does not establish production health.
 
-Review the current combined preview independently; production source is read-only.
-Read the accepted integration/motion reports and lead decisions. Preserve the warm
-light theme, root sketch and pixel-font reference. Verify:
+## Dependencies and remaining gaps
 
-- Desktop 1440×900, portraits 390×844 and 320×568, short landscape 844×390.
-  Capture settled exterior/interior states; no navigation/invitation, exit/heading
-  or shelf/item control collisions; touch-sized shelf controls at least 44px.
-- True touch emulation where supported, keyboard and wheel; label emulation
-  separately from actual hardware tests.
-- Every shelf and all six accessible buttons plus matching food meshes. Adjacent
-  shelves must not open the wrong item, including during camera interpolation.
-  Original reproduction: 320×568, Top shelf, wait until settled, click (236,478);
-  this used to open Cold brew `/items/046` and should now leave the route unchanged.
-- Item dialog focus trapping; Escape closes the dialog first and restores its
-  opener; subsequent Escape exits and focuses Open the fridge. Rapid/interrupted
-  entry and exit must not leave controls stuck or hidden.
-- Reduced-motion entry, exit and shelf changes. Forced GLB failure and unavailable
-  WebGL both retain `fridge-front.png`, an enabled inventory action and navigation.
-- All seven direct routes, browser back/forward, missing records and console errors.
+- No live fridge shelf/model placement contract: illustrative geometry must never
+  bind real item043 to demoFood_0; live inventory remains accessible as a list.
+- People API persists metadata and returns enrollment_status unknown. Viet now has
+  CLI enrollment, but no dashboard face-enrollment API. Do not infer enrollment.
+- Real Safari/iOS/Android/older-device profiling and physical screen-reader checks
+  remain unverified. Blender addon handshake previously timed out. Figma handoff
+  sync and measured material/LOD work are queued, not release claims.
+- Newly merged person/item recognition pipelines need teammate end-to-end camera
+  validation. Latest overview permits cloudGPU inference with Mac thin clients;
+  Khang's local k3d hosts backend/dashboard/lightweightCPU workers only.
+- Docker Desktop has about8GB assigned on a24GB Mac; account for that in infra
+  planning. k3d/helm were not installed; kubectl had no active context.
+- Infrastructure implementation and final video have not started.
 
-Return precise passed/failed/untested cases, reproduction steps, browser/viewport,
-and screenshot paths that actually exist. Do not substitute lead verification
-for independent sign-off. Route new findings to their responsible role, review
-the diff, integrate, and recheck the affected flow.
+## Runtime and resumption
 
-## Checks after relevant changes / before final sign-off
+Accepted demo preview: http://127.0.0.1:5176/ (confirm it is still running).
+Temporary candidate preview5178 and test backend8000 were stopped during wrap-up.
+Test containers fridge-review-postgres and infra-redpanda-1 were stopped, preserving
+state; native hostPostgres5432 was not changed. Docker Desktop remains running.
+Restart only when needed. TestPostgres uses127.0.0.1:15432; Redpanda19092.
+Create person.seen, item.event, fridge.event topics BEFORE starting backend.
 
-```sh
-npm run build
-npm run lint
-node tools/checks/fridge-motion.mjs
-node tools/checks/routes.mjs
-node tools/checks/mapping.mjs
-```
-
-Use `uv run --with mcp python tools/blender/remodel_via_mcp.py --verify` from the
-dashboard for the read-only addon check when troubleshooting Blender. Blender is
-not needed to run the frontend. Compare performance on the same device if motion
-or model complexity changes; distinguish export counts from live-scene totals.
-
-Evidence already retained: `docs/reviews/evidence/final-checks.txt`,
-`final-browser-results.json`, `mesh-results.json`, performance JSON, source hashes
-and screenshots. Local baseline was approximately 60 rAF FPS with 93 exterior /
-71 interior draw calls per frame; it does not certify phone performance.
+Temporary workspace pointer: /private/tmp/fridge-dashboard-active.txt.
+Do not rely on temporary files surviving. Start fresh workers from dashboard plus
+reviewed WIP files, with separate checkouts and credentials excluded. Keep
+source tests and accepted artifact checks meaningful; never weaken them to pass.

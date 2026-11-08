@@ -36,7 +36,7 @@ for (const aspect of [.5, .75, 1, 1.6, 2.4]) {
 }
 
 // Production GLB includes the pivot and all six independently pickable item roots.
-const file = readFileSync(new URL('../../public/models/mini-fridge.glb', import.meta.url))
+const file = readFileSync(new URL('../../src/assets/mini-fridge.glb', import.meta.url))
 assert.equal(file.toString('ascii', 0, 4), 'glTF')
 const gltf = JSON.parse(file.toString('utf8', 20, 20 + file.readUInt32LE(12)))
 assert.ok(gltf.nodes.find(n => n.name === 'DoorPivot')?.children.length > 0)

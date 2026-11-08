@@ -4,6 +4,19 @@ The dashboard is Khang's area in the repository ownership table. Keep worker edi
 
 Antigravity workers follow their selected role and the task brief. The coordination and dispatch instructions below apply to the Codex lead.
 
+## Branch and implementation workflow
+
+Khang develops on the `dashboard` branch, as specified in the project overview.
+Do not implement on `main`. Workers use isolated checkouts from the reviewed
+`dashboard` baseline. Integrate accepted patches back into `dashboard`; merging
+or pushing `main` is a separate explicit user instruction.
+
+Use agy for implementation code. Give each worker a detailed brief, request its
+plan, review the plan, then authorize coding and review actual diffs and evidence.
+Use a fresh accept-edits session if a resumed plan session retains read-only
+tools. Finish dashboard acceptance before infrastructure; video waits until the
+project is complete.
+
 ## Astra's role
 
 Act as creative director and final reviewer. Start with the live experience and the existing references in the repo root, `mainscreen.png` and `image.png`. Keep the fridge as the focal point and inventory access clear. For a visual polish pass, review the full path from the exterior to opening the fridge, choosing a shelf and item, and leaving the scene.

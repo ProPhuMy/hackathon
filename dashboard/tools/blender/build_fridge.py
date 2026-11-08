@@ -232,8 +232,8 @@ for (parent_name,material),parts in buckets.items():
 bpy.ops.object.select_all(action='DESELECT')
 for ob in collection.objects: ob.select_set(True)
 bpy.context.view_layer.objects.active=next(ob for ob in collection.objects if ob.type=='MESH')
-(root/'public/models').mkdir(exist_ok=True)
-bpy.ops.export_scene.gltf(filepath=str(root/'public/models/mini-fridge.glb'),export_format='GLB',use_selection=True,export_apply=True,export_yup=True,export_extras=True)
+(root/'src/assets').mkdir(parents=True,exist_ok=True)
+bpy.ops.export_scene.gltf(filepath=str(root/'src/assets/mini-fridge.glb'),export_format='GLB',use_selection=True,export_apply=True,export_yup=True,export_extras=True)
 bpy.context.preferences.filepaths.save_version=0
 bpy.ops.wm.save_as_mainfile(filepath=str(root/'tools/blender/mini-fridge.blend'))
 print('FRIDGE_EXPORTED',len(collection.objects),'nodes',sum(len(o.data.polygons) for o in collection.objects if o.type=='MESH'),'polygons',flush=True)
