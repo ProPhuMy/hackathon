@@ -203,6 +203,7 @@ def evaluate_command(
     labels_path: str = "data/labels.csv",
     clips_dir: str = "data/clips",
     config_path: str = "config.json",
+    detector_factory=None,
 ) -> dict[str, int]:
     """Evaluate item recognition pipeline against labeled clips."""
     from fridge_item.evaluate import evaluate_command as run_evaluate
@@ -211,6 +212,7 @@ def evaluate_command(
         labels_path=labels_path,
         clips_dir=clips_dir,
         config_path=config_path,
+        detector_factory=detector_factory,
     )
 
 

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 import csv
 from collections import Counter
 from pathlib import Path
 import tempfile
-from typing import Sequence
+from typing import Any
 
 
 def score(
@@ -45,30 +46,14 @@ def load_labels(labels_path: str | Path) -> dict[str, list[tuple[str, str]]]:
     return expected_by_clip
 
 
-def reset_tracker(detector) -> None:
-    """Reset tracker state on detector so tracks do not carry over across clips."""
-    if hasattr(detector, "reset") and callable(detector.reset):
-        detector.reset()
-    if hasattr(detector, "model") and hasattr(detector.model, "predictor"):
-        predictor = detector.model.predictor
-        if predictor is not None and hasattr(predictor, "trackers"):
-            predictor.trackers = []
-    try:
-        from ultralytics.trackers.basetrack import BaseTrack
-
-        BaseTrack._count = 0
-    except Exception:
-        pass
-
-
 def evaluate_command(
     labels_path: str = "data/labels.csv",
     clips_dir: str = "data/clips",
     config_path: str = "config.json",
+    detector_factory: Callable[[list[str], str], Any] | None = None,
 ) -> dict[str, int]:
-    """Run ItemPipeline over labeled clips with a temporary gallery per clip and evaluate accuracy."""
+    """Run ItemPipeline over labeled clips with a fresh temporary gallery and detector per clip."""
     from fridge_item.config import load
-    from fridge_item.detect import Detector
     from fridge_item.gallery import ItemGallery
     from fridge_item.pipeline import ItemPipeline
     from fridge_item.stream import iter_frames
@@ -79,7 +64,10 @@ def evaluate_command(
         return {"correct": 0, "missed": 0, "extra": 0}
 
     cfg = load(config_path)
-    detector = Detector(prompts=cfg.prompts, hand_label=cfg.hand_label)
+    if detector_factory is None:
+        from fridge_item.detect import Detector
+
+        detector_factory = Detector
 
     total_correct = 0
     total_missed = 0
@@ -87,8 +75,10 @@ def evaluate_command(
 
     for clip_name, expected_events in expected_by_clip.items():
         clip_path = Path(clips_dir) / clip_name
-        reset_tracker(detector)
+        if not clip_path.is_file():
+            raise FileNotFoundError(f"Clip not found: {clip_path}")
 
+        detector = detector_factory(cfg.prompts, cfg.hand_label)
         got_events: list[tuple[str, str]] = []
         with tempfile.TemporaryDirectory() as tmp_dir:
             gallery = ItemGallery(str(Path(tmp_dir) / "gallery.json"))
