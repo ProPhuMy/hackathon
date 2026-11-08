@@ -30,7 +30,7 @@ The **MCP server** is an access layer, not a new feature: it lets other Claude i
 People and items are recognized in parallel, then combined for matching. An event is created and sent to matching only when both pipelines have a result.  
 **Person recognition pipeline (feature 6\)**
 
-> 1. Galaxy Z Flip camera: streams video to the Mac  
+> 1. Galaxy Z Flip camera: streams video to the Mac, which forwards frames to the cloud GPU server  
 > 2. Face detection and alignment: SCRFD \+ YOLO-face ensemble (WBF)  
 > 3. Face embedding: ArcFace \+ AdaFace ensemble, with calibration  
 > 4. Tracking and temporal fusion: BoT-SORT; fusion weighted by MagFace quality score  
@@ -56,7 +56,7 @@ Each technique replaces a simple approach and fixes exactly one flaw of that app
 **Note:** these techniques are suggestions, not final choices. Each member researches their own area and may swap in a better technique, as long as it still fixes the flaw in the last column. When researching, check 4 things:
 
 > * Is there code and a pretrained model available  
-> * Does it run on a Mac (Apple Silicon), and how much RAM does it use  
+> * Does it run on the cloud NVIDIA GPU server (CUDA 12.8, RTX 3090 through 5090), and how much VRAM does it use  
 > * Per-frame processing speed  
 > * Integration difficulty within hackathon time
 
@@ -120,7 +120,7 @@ The Infrastructure table above is the tooling; this table is the distributed-sys
 
 Decided: do the watermark join, skip shadow deployment. The 3-node Redpanda cluster with chaos testing is also in, after the main flow runs on 1 node; all 3 nodes run on the same Mac, so it is a simulated distributed system, and the video must say so clearly.  
 Pitch story: the heavy models (SAM 2, HaMeR, ensembles) make the system slow, so it needs an event bus, Kubernetes and autoscaling. The infrastructure complexity is justified by the algorithm complexity itself.  
-Real risk: many models in the tables were written for NVIDIA GPUs, so each must be tried on Apple Silicon (MPS) before committing to it. Mac RAM is the limit when running k3d, Redpanda and several models at once.
+Real risk: we don't know yet which NVIDIA GPU we get (RTX 3090 / 4090 / 5090, A6000 or RTX PRO). Use one CUDA 12.8 stack that covers all of them, and build TensorRT engines on the actual machine; see [research/person-recognition.md](research/person-recognition.md#deployment). The Mac stays as a fallback, where RAM is the limit.
 
 ## **Priority order**
 
@@ -191,7 +191,7 @@ See the repo root `README.md` for folder ownership and the Git workflow.
 
 ### **Two notes before starting**
 
-> 1. The Mac GPU can't be used from inside Docker or k3d containers, because containers run in a Linux VM. So vision services run directly on macOS and talk to Redpanda; k3d only holds the backend, dashboard and lightweight workers. The autoscaling demo uses those lightweight workers.  
+> 1. The demo runs on the Mac; only model inference runs on a rented cloud NVIDIA GPU server (natively or in Docker with the NVIDIA Container Toolkit). The phones can't reach the cloud over local Wi-Fi, so a thin client on the Mac reads each phone stream, sends frames to the GPU server, gets results back and publishes events to Redpanda on the Mac. Connect the Mac and the GPU server with Tailscale or an SSH tunnel, and pick a GPU region close to the hackathon: every round trip adds to latency. The Mac's GPU can't be used from inside Docker or k3d, so on the Mac k3d only holds the backend, dashboard and lightweight workers; the autoscaling demo uses those workers.  
 > 2. Hackathon Wi-Fi often blocks devices from talking to each other. If the phones can't stream to the Mac, turn on a hotspot from one phone and put the Mac and both camera phones on it.
 
 ### **First tasks per role**
@@ -206,7 +206,7 @@ See the repo root `README.md` for folder ownership and the Git workflow.
 
 > 1. Read the stream from the second phone; detect door open by brightness.  
 > 2. YOLO \+ MediaPipe Hands; decide PUT/TAKE by the direction an item crosses a line at the fridge door; publish item.event.  
-> 3. Add DINOv2 \+ Hungarian to tell items apart, then Grounding DINO \+ SAM 2\. Research HaMeR early since it depends heavily on NVIDIA GPUs; if it doesn't run on Mac, keep MediaPipe.
+> 3. Add DINOv2 \+ Hungarian to tell items apart, then Grounding DINO \+ SAM 2\. HaMeR depends heavily on NVIDIA GPUs, so run it on the GPU server; if it doesn't fit the latency budget, keep MediaPipe.
 
 **Role 3, backend and matching (Phong)**
 
@@ -245,7 +245,8 @@ Only equipment the team already has; the Jetson is in Vietnam, so it is not part
 | :---- | :---- |
 | Galaxy Z Flip (folded in Flex mode) | Camera facing people, streams video to the Mac |
 | The team's second phone | Films items and hands at the fridge shelves |
-| Mac | Runs inference, backend and web dashboard |
+| Cloud NVIDIA GPU server (RTX 3090 / 4090 / 5090, A6000 or RTX PRO; Linux) | Runs model inference only, with TensorRT FP16 |
+| Mac | Runs the demo: reads the phone streams and forwards frames to the GPU server, plus backend, Redpanda and web dashboard; fallback for inference |
 
 ## **Out of scope**
 
@@ -255,7 +256,7 @@ Things that are easy to add mid-way but **will not be built**:
 > * A separate mobile app for users (web dashboard only)  
 > * Fines, payments, or SMS/email notifications  
 > * Multiple fridges or multiple cameras at once  
-> * Cloud deployment; the demo runs locally on the Mac  
+> * Cloud deployment of the app; the demo runs locally on the Mac. Exception: model inference may run on a rented cloud GPU server, called from the Mac  
 > * Training models from scratch; use existing models, then combine and fine-tune
 
 Rule: new ideas go here first. They move into scope only after the main flow (one person, one item, put in then taken out) runs end to end.
