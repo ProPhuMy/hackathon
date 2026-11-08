@@ -402,18 +402,18 @@ function FridgeWorld({
       })}
 
       {/* Image-based lighting and space lights */}
-      <ambientLight intensity={0.25} color="#101530" />
-      <directionalLight position={[3, 4, 4]} intensity={1.2} color="#ddc89a" />
-      <directionalLight position={[-4, 2, -2]} intensity={0.9} color="#3fd6ff" />
+      <ambientLight intensity={0.6} color="#5a6290" />
+      <directionalLight position={[3, 4, 4]} intensity={2.4} color="#f4f6ff" />
+      <directionalLight position={[-4, 2, -2]} intensity={1.5} color="#3fd6ff" />
       <Environment resolution={128}>
         <Lightformer
-          intensity={2.8}
+          intensity={4}
           position={[-3, 2, -2]}
           scale={[3, 6, 1]}
           color="#3fd6ff"
         />
         <Lightformer
-          intensity={2.2}
+          intensity={3.5}
           position={[3, 3, 2]}
           scale={[2, 5, 1]}
           color="#ddc89a"

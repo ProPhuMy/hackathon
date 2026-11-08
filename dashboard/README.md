@@ -84,15 +84,16 @@ uv run --with mcp python dashboard/tools/blender/remodel_via_mcp.py --render
 
 Deployments must serve `index.html` for frontend routes. This remains a Vite
 SPA with TanStack Router; it does not add TanStack Start server rendering.
-The Three.js renderer adds an approximately 283 KB gzipped lazy-loaded chunk.
+The Three.js renderer and space effects add an approximately 295 KB gzipped lazy-loaded chunk.
 
 ## Demo model mapping
 
 `src/itemMapping.js` maps the six fixed model slots to demo IDs `043`–`048`.
-Mesh inspection and shelf buttons both resolve by ID, so inventory order can
-change safely. Missing records are not opened and their shelf buttons are omitted;
-new, unmapped records remain available in Inventory. Mesh picking and hover are
-limited to the selected shelf after its camera transition settles.
+`Fridge3D.jsx` inverts it: a mapped item flies out as its GLB food model, any
+other item as a generated capsule in its colour, and model slots with no matching
+item stay hidden. Floating items and their DOM buttons both resolve by ID, so
+inventory order can change safely. Picking and hover work only once the items
+have settled (progress 1).
 
 Run `node tools/checks/mapping.mjs` for the mapping checks. The GLB retains its
 legacy `itemIndex` metadata; live server IDs and dynamic model placement still

@@ -91,7 +91,7 @@ const accretionFragmentShader = /* glsl */`
     float innerGlow = pow(smoothstep(1.3, 0.9, r), 2.0);
     col = mix(col, vec3(1.0), innerGlow * 0.65);
 
-    vec3 finalCol = col * (pattern + 0.3) * ringFalloff * uIntensity * 2.0;
+    vec3 finalCol = col * (pattern + 0.3) * ringFalloff * uIntensity * 0.9;
     float alpha = ringFalloff * uIntensity;
 
     gl_FragColor = vec4(finalCol, alpha);
@@ -123,7 +123,7 @@ const lensFragmentShader = /* glsl */`
     float flare = pow(wave, 5.0) * smoothstep(1.05, 1.35, r) * smoothstep(3.2, 1.7, r);
 
     vec3 lensCol = mix(CYAN_COLOR, VIOLET_COLOR, sin(theta * 2.0) * 0.5 + 0.5);
-    vec3 finalCol = lensCol * flare * uIntensity * 1.3;
+    vec3 finalCol = lensCol * flare * uIntensity * 0.6;
     float alpha = flare * uIntensity;
 
     gl_FragColor = vec4(finalCol, alpha);
@@ -166,7 +166,7 @@ const sparkVertexShader = /* glsl */`
     gl_Position = projectionMatrix * mvPosition;
 
     float sizeFade = smoothstep(0.0, 0.2, t) * smoothstep(1.0, 0.75, t);
-    gl_PointSize = aSize * sizeFade * uIntensity * (260.0 / -mvPosition.z);
+    gl_PointSize = min(aSize * sizeFade * uIntensity * (110.0 / -mvPosition.z), 9.0);
   }
 `
 
@@ -213,6 +213,7 @@ const tunnelFragmentShader = /* glsl */`
   uniform float uTunnelSpeed;
   uniform float uWarp;
   uniform float uReduced;
+  #define TUNNEL_AHEAD 90.0
 
   varying vec3 vLocalPos;
   varying vec2 vUv;
@@ -221,11 +222,11 @@ const tunnelFragmentShader = /* glsl */`
     float twist = zCoord * 0.12 * (1.0 + 3.5 * warpVal);
     float theta = angle + radialOffset + twist;
 
-    float zScroll = zCoord * 0.35 - timeVal * speedVal * 2.6;
+    float zScroll = zCoord * 0.35 + timeVal * speedVal * 2.6;
     float rings = sin(zScroll * 6.28318);
     rings = pow(rings * 0.5 + 0.5, 4.0);
 
-    float streaks = snoise(vec3(cos(theta) * 2.8, sin(theta) * 2.8, zCoord * 0.18 - timeVal * speedVal * 1.6));
+    float streaks = snoise(vec3(cos(theta) * 2.8, sin(theta) * 2.8, zCoord * 0.18 + timeVal * speedVal * 1.6));
     streaks = smoothstep(0.25, 0.8, streaks);
 
     return rings * 0.7 + streaks * 0.55;
@@ -236,8 +237,8 @@ const tunnelFragmentShader = /* glsl */`
       discard;
     }
 
-    float zCoord = -vLocalPos.z + 15.0;
-    float zNorm = clamp(zCoord / 210.0, 0.0, 1.0);
+    float zCoord = TUNNEL_AHEAD - vLocalPos.z; // distance ahead of the camera
+    float zNorm = clamp(zCoord / 200.0, 0.0, 1.0);
 
     float angle = atan(vLocalPos.y, vLocalPos.x);
 
@@ -263,10 +264,10 @@ const tunnelFragmentShader = /* glsl */`
 
     // Bright core glow down center far end
     float farGlow = smoothstep(0.35, 1.0, zNorm);
-    col += mix(CYAN_COLOR, vec3(1.0), 0.75) * (farGlow * 1.7);
+    col += mix(CYAN_COLOR, vec3(1.0), 0.75) * (farGlow * 0.9);
 
     // Edge darkening near camera end
-    float entranceFade = smoothstep(0.02, 0.20, zNorm);
+    float entranceFade = smoothstep(0.0, 0.03, zNorm);
     float exitFade = smoothstep(1.0, 0.94, zNorm);
     col *= (entranceFade * exitFade);
 
@@ -290,8 +291,9 @@ const flashFragmentShader = /* glsl */`
 
   void main() {
     if (uFlash < 0.001) discard;
-    vec3 col = mix(vec3(1.0), CYAN_COLOR, 0.2) * uFlash;
-    gl_FragColor = vec4(col, uFlash);
+    float f = uFlash * uFlash * 0.8;
+    vec3 col = mix(vec3(1.0), CYAN_COLOR, 0.35) * f;
+    gl_FragColor = vec4(col, f);
   }
 `
 
@@ -388,20 +390,22 @@ export default function Wormhole({ rig }) {
         if (horizonMeshRef.current?.material?.uniforms) {
           horizonMeshRef.current.material.uniforms.uIntensity.value = pIntensity
         }
+        // Fade the glowing parts as the camera nears the mouth so the dive reads as falling into darkness, not a white-out.
+        const glow = pIntensity * THREE.MathUtils.smoothstep(_camPos.distanceTo(_portalPos), pRadius * 0.9, pRadius * 3.5)
         if (accretionMeshRef.current?.material?.uniforms) {
           accretionMeshRef.current.material.uniforms.uTime.value = time
-          accretionMeshRef.current.material.uniforms.uIntensity.value = pIntensity
+          accretionMeshRef.current.material.uniforms.uIntensity.value = glow
           accretionMeshRef.current.material.uniforms.uSwirl.value = pSwirl
           accretionMeshRef.current.material.uniforms.uReduced.value = reducedVal
         }
         if (lensMeshRef.current?.material?.uniforms) {
           lensMeshRef.current.material.uniforms.uTime.value = time
-          lensMeshRef.current.material.uniforms.uIntensity.value = pIntensity
+          lensMeshRef.current.material.uniforms.uIntensity.value = glow
           lensMeshRef.current.material.uniforms.uReduced.value = reducedVal
         }
         if (sparkMeshRef.current?.material?.uniforms) {
           sparkMeshRef.current.material.uniforms.uTime.value = time
-          sparkMeshRef.current.material.uniforms.uIntensity.value = pIntensity
+          sparkMeshRef.current.material.uniforms.uIntensity.value = glow
           sparkMeshRef.current.material.uniforms.uSwirl.value = pSwirl
           sparkMeshRef.current.material.uniforms.uReduced.value = reducedVal
         }
@@ -416,7 +420,7 @@ export default function Wormhole({ rig }) {
       if (tunnelVal > 0.0001) {
         tunnelMeshRef.current.visible = true
         tunnelMeshRef.current.position.copy(_camPos)
-        tunnelMeshRef.current.position.addScaledVector(_camDir, 90.0)
+        tunnelMeshRef.current.position.addScaledVector(_camDir, 90.0) // must match TUNNEL_AHEAD in the shader
         tunnelMeshRef.current.quaternion.copy(camera.quaternion)
 
         if (tunnelMeshRef.current.material?.uniforms) {

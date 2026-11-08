@@ -62,12 +62,13 @@ export function floatingAnchor(index, count = 6, seed = 0) {
   
   // Elliptical distribution around fridge center [0, 0.925, -30]
   // Fridge half-extents: x=0.56, y=0.925, z=0.55.
-  const rx = 1.45;
+  // Wider on the left so items clear the door, which swings open toward -x/+z.
+  const rx = Math.cos(baseAngle) < 0 ? 1.85 : 1.5;
   const ry = 1.60;
-  
+
   const x = Math.cos(baseAngle) * rx;
   const y = 0.925 + Math.sin(baseAngle) * ry;
-  const z = -30 + Math.sin(baseAngle * 2 + 0.5) * 0.45;
+  const z = -29.7 + Math.sin(baseAngle * 2 + 0.5) * 0.35;
   
   return [x, y, z];
 }

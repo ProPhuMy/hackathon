@@ -47,7 +47,7 @@ const starVertexShader = /* glsl */`
     gl_Position = projectionMatrix * mvPosition;
 
     float twinkle = mix(1.0, 0.65 + 0.35 * sin(uTime * aSpeed + aPhase), uTwinkle);
-    gl_PointSize = aSize * twinkle * (280.0 / -mvPosition.z);
+    gl_PointSize = min(aSize * twinkle * (280.0 / -mvPosition.z), 7.0);
 
     vAlpha = smoothstep(1.5, 4.0, -mvPosition.z);
   }
