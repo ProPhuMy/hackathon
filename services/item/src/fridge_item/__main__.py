@@ -97,6 +97,7 @@ def run_command(
     embed: bool = False,
     holding: str = "box",
     detector: str = "yoloe",
+    shelf_check: bool = False,
 ) -> None:
     """Run item recognition pipeline, printing events, publishing to Kafka, and tracking latency."""
     from fridge_item.config import load
@@ -148,6 +149,7 @@ def run_command(
         gallery=gallery,
         embed=embedder,
         segment=segmenter,
+        shelf_check=shelf_check,
     )
 
     writer: cv2.VideoWriter | None = None
@@ -245,6 +247,7 @@ def evaluate_command(
     embed: bool = False,
     holding: str = "box",
     detector: str = "yoloe",
+    shelf_check: bool = False,
 ) -> dict[str, int]:
     """Evaluate item recognition pipeline against labeled clips."""
     from fridge_item.evaluate import evaluate_command as run_evaluate
@@ -266,6 +269,8 @@ def evaluate_command(
         detector_factory=detector_factory,
         embed=embed,
         holding=holding,
+        detector=detector,
+        shelf_check=shelf_check,
     )
 
 
@@ -354,6 +359,11 @@ def parse_args(args: list[str] | None = None) -> argparse.Namespace:
         default="yoloe",
         help="Detector to use: yoloe or gdino (default: yoloe)",
     )
+    run_parser.add_argument(
+        "--shelf-check",
+        action="store_true",
+        help="Enable shelf before/after second opinion",
+    )
 
     evaluate_parser = subparsers.add_parser(
         "evaluate", help="Evaluate item recognition pipeline against labeled clips"
@@ -390,6 +400,11 @@ def parse_args(args: list[str] | None = None) -> argparse.Namespace:
         default="yoloe",
         help="Detector to use: yoloe or gdino (default: yoloe)",
     )
+    evaluate_parser.add_argument(
+        "--shelf-check",
+        action="store_true",
+        help="Enable shelf before/after second opinion",
+    )
 
     return parser.parse_args(args)
 
@@ -421,6 +436,7 @@ def main(args: list[str] | None = None) -> None:
             embed=parsed.embed,
             holding=parsed.holding,
             detector=parsed.detector,
+            shelf_check=parsed.shelf_check,
         )
     elif parsed.subcommand == "evaluate":
         evaluate_command(
@@ -430,6 +446,7 @@ def main(args: list[str] | None = None) -> None:
             embed=parsed.embed,
             holding=parsed.holding,
             detector=parsed.detector,
+            shelf_check=parsed.shelf_check,
         )
 
 

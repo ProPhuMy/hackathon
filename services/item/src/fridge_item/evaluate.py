@@ -54,6 +54,7 @@ def evaluate_command(
     embed: bool = False,
     holding: str = "box",
     detector: str = "yoloe",
+    shelf_check: bool = False,
 ) -> dict[str, int]:
     """Run ItemPipeline over labeled clips with a fresh temporary gallery and detector per clip."""
     from fridge_item.config import load
@@ -108,6 +109,7 @@ def evaluate_command(
                 gallery=gallery,
                 embed=embedder,
                 segment=segmenter,
+                shelf_check=shelf_check,
             )
 
             for frame, ts in iter_frames(str(clip_path)):

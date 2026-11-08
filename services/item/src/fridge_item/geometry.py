@@ -30,6 +30,15 @@ class Box:
         h = max(0.0, iy2 - iy1)
         return w * h
 
+    def iou(self, other: "Box") -> float:
+        inter = self.intersection(other)
+        if inter <= 0.0:
+            return 0.0
+        union = self.area() + other.area() - inter
+        if union <= 0.0:
+            return 0.0
+        return inter / union
+
 
 @dataclass(frozen=True)
 class Track:

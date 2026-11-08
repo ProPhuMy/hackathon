@@ -9,6 +9,7 @@ from fridge_item.events import item_event
 from fridge_item.gallery import ItemGallery
 from fridge_item.geometry import Track
 from fridge_item.session import DoorSession, Trip
+from fridge_item.shelf import shelf_diff
 
 
 class ItemPipeline:
@@ -19,16 +20,24 @@ class ItemPipeline:
         gallery: ItemGallery,
         embed: Callable[[np.ndarray], np.ndarray] | None = None,
         segment: Callable[[np.ndarray, list[Track]], dict[int, np.ndarray]] | None = None,
+        shelf_check: bool = False,
     ) -> None:
         self.cfg = cfg
         self.detect = detect
         self.gallery = gallery
         self.embed = embed
         self.segment = segment
+        self.shelf_check = shelf_check
         self.door_detector = DoorDetector(roi=cfg.roi, on=cfg.door_on, off=cfg.door_off)
         self.session: DoorSession | None = None
         self.tracks: list[Track] = []
         self.door_open: bool = False
+        self._shelf_before: list[Track] | None = None
+        self._shelf_after: list[Track] | None = None
+        self._last_hand_ts: str | None = None
+        self._last_open_ts: str | None = None
+        self._emitted_put_labels: set[str] = set()
+        self._emitted_take_labels: set[str] = set()
 
     def process(self, frame: np.ndarray, ts: str) -> list[dict]:
         is_open = self.door_detector.update(frame)
@@ -40,8 +49,26 @@ class ItemPipeline:
         else:
             if self.session is None:
                 self.session = DoorSession(self.cfg.line)
+                self._shelf_before = None
+                self._shelf_after = None
+                self._last_hand_ts = None
+                self._last_open_ts = None
+                self._emitted_put_labels.clear()
+                self._emitted_take_labels.clear()
+
             tracks = self.detect(frame)
             self.tracks = tracks
+            self._last_open_ts = ts
+
+            has_hand = any(t.kind == "hand" for t in tracks)
+            if has_hand:
+                self._last_hand_ts = ts
+            else:
+                items = [t for t in tracks if t.kind == "item"]
+                if self._shelf_before is None:
+                    self._shelf_before = list(items)
+                self._shelf_after = list(items)
+
             item_tracks = [t for t in tracks if t.kind == "item"]
             masks = (
                 self.segment(frame, item_tracks)
@@ -49,14 +76,67 @@ class ItemPipeline:
                 else None
             )
             trips = self.session.update(tracks, ts, frame, masks=masks)
-            return self._trips_to_events(trips)
+            events = self._trips_to_events(trips)
+            for ev in events:
+                if ev["type"] == "PUT":
+                    self._emitted_put_labels.add(ev["item_label"])
+                elif ev["type"] == "TAKE":
+                    self._emitted_take_labels.add(ev["item_label"])
+            return events
 
     def close(self) -> list[dict]:
         """Flush and close any open door session, returning the resulting events."""
         if self.session is not None:
             trips = self.session.close()
             self.session = None
-            return self._trips_to_events(trips)
+            events = self._trips_to_events(trips)
+            for ev in events:
+                if ev["type"] == "PUT":
+                    self._emitted_put_labels.add(ev["item_label"])
+                elif ev["type"] == "TAKE":
+                    self._emitted_take_labels.add(ev["item_label"])
+
+            if (
+                self.shelf_check
+                and self._shelf_before is not None
+                and self._shelf_after is not None
+            ):
+                added, removed = shelf_diff(self._shelf_before, self._shelf_after)
+                shelf_ts = self._last_hand_ts or self._last_open_ts or ""
+                shelf_trips: list[Trip] = []
+                for item in added:
+                    if item.label not in self._emitted_put_labels:
+                        shelf_trips.append(
+                            Trip(
+                                type="PUT",
+                                item=item,
+                                ts=shelf_ts,
+                                crop=None,
+                                confidence=0.3,
+                            )
+                        )
+                for item in removed:
+                    if item.label not in self._emitted_take_labels:
+                        shelf_trips.append(
+                            Trip(
+                                type="TAKE",
+                                item=item,
+                                ts=shelf_ts,
+                                crop=None,
+                                confidence=0.3,
+                            )
+                        )
+                if shelf_trips:
+                    shelf_events = self._trips_to_events(shelf_trips)
+                    events.extend(shelf_events)
+
+            self._shelf_before = None
+            self._shelf_after = None
+            self._last_hand_ts = None
+            self._last_open_ts = None
+            self._emitted_put_labels.clear()
+            self._emitted_take_labels.clear()
+            return events
         return []
 
 
