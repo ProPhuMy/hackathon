@@ -10,6 +10,7 @@ def test_live_check_outputs_only_aggregate_diagnostics(monkeypatch, capsys):
     from src import capture
     from src.vision import arcface as vision
     class Vision:
+        provider = 'CPUExecutionProvider'
         def __init__(self, *args):
             pass
         def single_face(self, image):

@@ -13,13 +13,15 @@ def execute(args):
     import numpy as np
     import onnxruntime as ort
     from insightface.model_zoo import get_model
+    from ..vision import onnx_providers
 
     image = cv2.imread(str(args.image))
     if image is None:
         raise ValueError('Cannot decode the supplied image')
+    providers, ctx_id = onnx_providers()
     try:
-        detector = get_model(str(args.detector), providers=['CPUExecutionProvider'])
-        recognizer = get_model(str(args.recognizer), providers=['CPUExecutionProvider'])
+        detector = get_model(str(args.detector), providers=providers)
+        recognizer = get_model(str(args.recognizer), providers=providers)
     except Exception as error:
         raise ValueError(f"Failed to load ONNX model: {error}") from error
     if detector is None or recognizer is None:
@@ -29,8 +31,8 @@ def execute(args):
     if not hasattr(recognizer, 'get_feat'):
         raise ValueError('Unsupported recognizer model; supply an ArcFace model')
     try:
-        detector.prepare(ctx_id=-1, input_size=(640, 640))
-        recognizer.prepare(ctx_id=-1)
+        detector.prepare(ctx_id=ctx_id, input_size=(640, 640))
+        recognizer.prepare(ctx_id=ctx_id)
     except Exception as error:
         raise ValueError(f"Failed to initialize model: {error}") from error
     latencies = []
@@ -53,6 +55,6 @@ def execute(args):
     artifacts = [{'file': path.name, 'bytes': path.stat().st_size, 'sha256': file_hash(path)}
                  for path in (args.detector, args.recognizer)]
     print(json.dumps({'platform': platform.platform(), 'machine': platform.machine(),
-                      'provider': 'CPUExecutionProvider', 'available_providers': ort.get_available_providers(),
+                      'provider': recognizer.session.get_providers()[0], 'available_providers': ort.get_available_providers(),
                       'warm_samples': len(latencies), 'p50_ms': float(np.percentile(latencies, 50)),
                       'p95_ms': float(np.percentile(latencies, 95)), 'models': artifacts}, indent=2))

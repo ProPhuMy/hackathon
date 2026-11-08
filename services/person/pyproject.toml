@@ -10,7 +10,10 @@ dependencies = [
     "insightface==2.1",
     "jsonschema==4.26.0",
     "numpy==2.4.6",
-    "onnxruntime==1.31.1",
+    # Same 1.31.1 runtime everywhere: the CUDA 13 build on Linux (cloud/RTX GPUs; CPU fallback
+    # without one), the CPU build elsewhere (Apple Silicon dev host).
+    "onnxruntime==1.31.1; sys_platform != 'linux'",
+    "onnxruntime-gpu[cuda,cudnn]==1.31.1; sys_platform == 'linux'",
     "opencv-python==5.0.0.93",
     "scikit-learn==1.9.1",
     "torch==2.15.0",
@@ -26,6 +29,10 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-name = "src"
 module-root = ""
+
+[tool.uv]
+# insightface requires the CPU `onnxruntime`; on Linux it would overwrite the GPU build's files.
+override-dependencies = ["onnxruntime==1.31.1; sys_platform != 'linux'"]
 
 [dependency-groups]
 dev = [

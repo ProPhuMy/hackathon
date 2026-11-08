@@ -69,6 +69,23 @@ Next gate: consenting enrollment/probe clips and a reachable camera for phase 1.
 person join policy still require coordination with Role 3. Follow the phased
 acceptance criteria in HUMAN_RECOGNITION_PLAN.md before adding ensemble layers.
 
+## NVIDIA GPU
+
+On Linux, `uv sync` installs the CUDA 13 build of ONNX Runtime (`onnxruntime-gpu`, with pip CUDA/cuDNN
+libraries); macOS keeps the CPU build. SCRFD and ArcFace then run on the GPU automatically, so no flag is
+needed. It needs an NVIDIA driver that supports CUDA 13 (`nvidia-smi` shows "CUDA Version: 13.x"). Without a
+usable GPU, ONNX Runtime prints an "EP Error" and falls back to CPU. `check-models` and `check-camera` report
+which `provider` actually ran.
+
+Measured 2026-11-08 on a GTX 1650 laptop (i5-11400H), with the same SCRFD + ArcFace weights:
+
+- `check-models` p50: 33 ms on GPU vs about 140 ms on CPU.
+- `check-camera` median: 21 ms on GPU vs 67 ms on CPU.
+- Evaluation metrics were identical on CPU and GPU, so a CPU-calibrated policy stays valid.
+
+The `run` loop samples a frame every 0.2 s, so CPU alone is enough for one person service. The GPU leaves
+headroom when the item service shares the machine.
+
 ## Single-face baseline CLI
 
 Implemented: bounded capture in a separate process, single-face enrollment,

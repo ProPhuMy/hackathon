@@ -12,7 +12,7 @@ def execute(args):
     from ..capture import Capture
     from ..vision.arcface import Vision
     vision = Vision(args.detector, args.recognizer)
-    report = dict(decoded_frames=0, usable_single_face_frames=0, stale_frames=0, reconnects=0)
+    report = dict(provider=vision.provider, decoded_frames=0, usable_single_face_frames=0, stale_frames=0, reconnects=0)
     timings = []
     started = time.monotonic()
     with Capture(args.source) as capture:

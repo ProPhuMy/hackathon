@@ -6,6 +6,7 @@ from insightface.model_zoo import get_model
 from insightface.utils.face_align import norm_crop
 from ..identity.recognition import unit
 from ..storage import file_hash
+from . import onnx_providers
 
 
 class Vision:
@@ -15,10 +16,13 @@ class Vision:
             if not path.is_file():
                 raise ValueError(f'Missing local model: {path}')
         self.signature = ':'.join(file_hash(path) for path in paths) + ':insightface-112-bgr-v1'
-        self.detector = get_model(str(paths[0]), providers=['CPUExecutionProvider'])
-        self.encoder = get_model(str(paths[1]), providers=['CPUExecutionProvider'])
-        self.detector.prepare(ctx_id=-1, input_size=(640, 640))
-        self.encoder.prepare(ctx_id=-1)
+        providers, ctx_id = onnx_providers()
+        self.detector = get_model(str(paths[0]), providers=providers)
+        self.encoder = get_model(str(paths[1]), providers=providers)
+        self.detector.prepare(ctx_id=ctx_id, input_size=(640, 640))
+        self.encoder.prepare(ctx_id=ctx_id)
+        # What actually runs: ORT silently falls back to CPU when CUDA cannot start.
+        self.provider = self.encoder.session.get_providers()[0]
 
     def aligned_face(self, image):
         boxes, landmarks = self.detector.detect(image, max_num=0)
