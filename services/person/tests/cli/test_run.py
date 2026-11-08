@@ -119,12 +119,14 @@ def test_reconnect_boundary_requires_fresh_evidence_and_segment(tmp_path, monkey
     assert events[1]['ts'].endswith('01.000Z')
 
 
-def setup_ensemble(tmp_path, monkeypatch, ada_live=(0., 1.), ada_enrolled=(0., 1.), ada_model='test-ada'):
+def setup_ensemble(tmp_path, monkeypatch, ada_live=(0., 1.), ada_enrolled=(0., 1.), ada_model='test-ada', frames=None):
     """ArcFace and AdaFace live in different spaces: ArcFace sees [1, 0], AdaFace sees ada_live."""
     class Vision:
         signature = 'test-model'
         def __init__(self, *args):
             pass
+        def single_face(self, image):
+            return image  # lets the pre-fix code reach scoring, so these tests fail for the right reason
         def aligned_face(self, image):
             return image  # (crop, confidence); the fake crop is the ArcFace vector
         def encode(self, crop):
@@ -135,7 +137,7 @@ def setup_ensemble(tmp_path, monkeypatch, ada_live=(0., 1.), ada_enrolled=(0., 1
             pass
         def encode(self, crop):
             return {'adaface': np.array(ada_live), 'magface_norm': 20.}
-    Capture = fake_capture([
+    Capture = fake_capture(frames if frames is not None else [
         ((np.array([1., 0.]), 1.), 100., f'2026-01-01T00:00:0{i:05.3f}Z')
         for i in range(6)
     ])
@@ -205,4 +207,14 @@ def test_ensemble_policy_identities_must_match_both_galleries(tmp_path, monkeypa
     policy['conformal']['b'] = [0.1] * 10
     policy_path.write_text(json.dumps(policy))
     with pytest.raises(ValueError, match='identities must match'):
+        runtime.execute(args)
+
+
+def test_adaface_gallery_change_stops_active_run(tmp_path, monkeypatch):
+    def frames():
+        yield frame(0.)
+        Gallery(tmp_path / 'gallery_adaface.json', 'test-ada').remove('a')
+        yield frame(.2)
+    args, _, _ = setup_ensemble(tmp_path, monkeypatch, frames=frames())
+    with pytest.raises(ValueError, match='Gallery changed'):
         runtime.execute(args)

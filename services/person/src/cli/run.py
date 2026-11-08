@@ -44,10 +44,16 @@ def execute(args):
             ada_path = Path(args.ada_gallery or args.gallery.parent / 'gallery_adaface.json')
             if not ada_path.is_file():
                 raise ValueError(f'Ensemble policy needs an AdaFace gallery: {ada_path}')
+            # shortcut: MagFace runs only because it is part of encoders.signature; its quality norm is
+            # not used for evidence weighting yet (weight = detector confidence). Wire it in or drop it.
             encoders = FaceEncoders(args.adaface, args.magface)
-            # Bound to the live AdaFace model: a gallery enrolled with another model is rejected here.
-            ada_gallery = Gallery(ada_path, encoders.signature)
-            if policy.get('ada_gallery') != ada_gallery.fingerprint or policy.get('ada_model') != encoders.signature:
+            try:  # bound to the live encoders: a gallery enrolled with another model is rejected
+                ada_gallery = Gallery(ada_path, encoders.signature)
+            except ValueError as error:
+                raise ValueError(f'AdaFace gallery {ada_path}: {error}') from error
+            if 'ada_gallery' not in policy or 'ada_model' not in policy:
+                raise ValueError('Ensemble policy lacks ada_gallery/ada_model binding; add them to the policy')
+            if policy['ada_gallery'] != ada_gallery.fingerprint or policy['ada_model'] != encoders.signature:
                 raise ValueError('Ensemble policy is incompatible with current AdaFace gallery/model; recalibrate')
             engine = EnsembleEngine(gallery, ada_gallery, policy)
         else:

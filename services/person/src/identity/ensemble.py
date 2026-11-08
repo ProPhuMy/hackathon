@@ -215,7 +215,9 @@ class EnsembleEngine(Baseline):
     """Baseline's evidence/reset policy, with the calibrated ensemble deciding each step.
 
     An observation is concat(unit(ArcFace), unit(AdaFace)) / sqrt(2). Evidence averages it like any
-    unit vector, and decide() splits it back so each gallery is scored only in its own embedding space.
+    unit vector (each half's mean equals that encoder's own weighted mean), and decide() splits it back
+    so each gallery is scored only in its own embedding space. The continuity gate is applied per
+    encoder in observe(); Evidence's own gates on the joint vector see only the average cosine.
     """
     def __init__(self, arcface, adaface, policy):
         identities = set(policy['identities'])
@@ -232,6 +234,17 @@ class EnsembleEngine(Baseline):
         arc, ada = unit(arc_vector), unit(ada_vector)
         self.split = len(arc)
         return np.concatenate([arc, ada]) / np.sqrt(2)
+
+    def observe(self, vector, weight, now):
+        # Same 0.3 continuity threshold as Evidence, but in each space: one encoder seeing a
+        # different face must restart the evidence even when the average cosine still passes.
+        if self.evidence.samples:
+            previous, current = self.evidence.samples[-1][0], unit(vector)
+            s = self.split
+            if min(float(unit(previous[:s]) @ unit(current[:s])),
+                   float(unit(previous[s:]) @ unit(current[s:]))) < .3:
+                self.reset()
+        return super().observe(vector, weight, now)
 
     def decide(self, vector):
         if self.split is None:

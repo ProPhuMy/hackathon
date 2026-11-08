@@ -1,6 +1,7 @@
 import pytest
 from conftest import score_dataset
-from src.identity.ensemble import fit_policy, evaluate, predict, candidate_set
+from src.identity.ensemble import EnsembleEngine, fit_policy, evaluate, predict, candidate_set
+from src.identity.gallery import Gallery
 
 
 def test_fitted_fusion_conformal_and_independent_evaluation():
@@ -92,3 +93,20 @@ def test_truncated_but_well_formed_provenance_is_rejected():
     policy['fitting_encounters'].pop()
     with pytest.raises(ValueError, match='incomplete'):
         evaluate(policy, score_dataset('test'))
+
+
+def test_ensemble_continuity_is_checked_in_each_encoder_space(tmp_path):
+    # ArcFace stays on the same face while AdaFace jumps to an orthogonal one: the average cosine
+    # (0.5) would pass the joint 0.3 gate, but the AdaFace space alone breaks continuity.
+    arc, ada = Gallery(tmp_path / 'arc.json', 'arc'), Gallery(tmp_path / 'ada.json', 'ada')
+    arc.enroll('a', [[1., 0.]] * 10)
+    ada.enroll('a', [[1., 0.]] * 10)
+    policy = {'version': 1, 'alpha': .1, 'prefix_s': 1., 'identities': ['a'], 'coefficients': [2., 2.],
+              'intercept': 0., 'gates': {'accept': .5, 'reject': .2, 'margin': 0.}, 'conformal': {'a': [.1] * 10}}
+    engine = EnsembleEngine(arc, ada, policy)
+    for t in (0., .2):
+        engine.observe(engine.observation([1., 0.], [1., 0.]), 1., t)
+    generation = engine.generation
+    engine.observe(engine.observation([1., 0.], [0., 1.]), 1., .4)
+    assert len(engine.evidence.samples) == 1
+    assert engine.generation > generation
