@@ -55,3 +55,21 @@ def test_ambiguous_source_landmarks_are_withheld(monkeypatch):
     result = fuse_faces([face([15, 10, 65, 60], points=points)], [], (100, 100))
     assert len(result) == 2
     assert all(face.landmarks is None for face in result)
+
+
+def test_wbf_single_and_two_detector_faces():
+    pts_scrfd = np.array([[20.0, 20.0], [40.0, 20.0], [30.0, 30.0], [22.0, 40.0], [38.0, 40.0]], dtype=float)
+    pts_yolo = pts_scrfd + 0.5
+    scrfd_face = FaceDetection(np.array([10.0, 10.0, 50.0, 50.0]), 0.9, pts_scrfd)
+    yolo_face = FaceDetection(np.array([12.0, 12.0, 52.0, 52.0]), 0.85, pts_yolo)
+
+    fused = fuse_faces([scrfd_face], [yolo_face], (100, 100))
+    assert len(fused) == 1
+    assert np.array_equal(fused[0].landmarks, pts_scrfd)
+
+    yolo_only = FaceDetection(np.array([60.0, 10.0, 95.0, 50.0]), 0.8, pts_yolo)
+    fused_single = fuse_faces([], [yolo_only], (100, 100))
+    assert len(fused_single) == 1
+    assert np.allclose(fused_single[0].box, [60.0, 10.0, 95.0, 50.0])
+
+    assert fuse_faces([], [], (100, 100)) == []

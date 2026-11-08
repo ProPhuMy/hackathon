@@ -3,7 +3,7 @@ from collections import deque
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 from .recognition import unit
-from ..vision.detection import _iou
+from ..vision.boxes import iou
 
 
 class KalmanBoxTracker:
@@ -166,7 +166,7 @@ class FaceTracker:
             cost_matrix = np.full((len(self.tracks), len(detections)), 1000.0)
             for t_idx, track in enumerate(self.tracks):
                 for d_idx, det in enumerate(detections):
-                    iou_val = _iou(track.last_box, det['box'])
+                    iou_val = iou(track.last_box, det['box'])
                     arc_vec = det.get('arc_vector')
                     if track.smooth_appearance is not None and arc_vec is not None:
                         cos_sim = float(np.dot(track.smooth_appearance, arc_vec))

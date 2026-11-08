@@ -9,7 +9,8 @@ def execute(args):
     import numpy as np
     import onnxruntime as ort
     from insightface.model_zoo import get_model
-    from ..vision.detection import FaceDetection, _iou, fuse_faces, _valid_points
+    from ..vision.boxes import iou, valid_points
+    from ..vision.detection import FaceDetection, fuse_faces
     from ..vision.yolo5face import YOLO5Face
 
     scrfd_path = args.scrfd or args.detector
@@ -52,7 +53,7 @@ def execute(args):
         if boxes is not None and len(boxes) > 0:
             for idx, b in enumerate(boxes):
                 if len(b) >= 5 and np.isfinite(b[:5]).all():
-                    pts = _valid_points(landmarks[idx], b[:4]) if landmarks is not None and len(landmarks) > idx else None
+                    pts = valid_points(landmarks[idx], b[:4]) if landmarks is not None and len(landmarks) > idx else None
                     current_scrfd.append(FaceDetection(box=np.asarray(b[:4], dtype=float), confidence=float(b[4]), landmarks=pts))
 
         t_yolo_start = time.perf_counter()
@@ -78,8 +79,8 @@ def execute(args):
     scrfd_only = 0
     yolo_only = 0
     for f in fused_faces:
-        in_scrfd = any(_iou(s.box, f.box) >= 0.55 for s in scrfd_faces)
-        in_yolo = any(_iou(y.box, f.box) >= 0.55 for y in yolo_faces)
+        in_scrfd = any(iou(s.box, f.box) >= 0.55 for s in scrfd_faces)
+        in_yolo = any(iou(y.box, f.box) >= 0.55 for y in yolo_faces)
         if in_scrfd and in_yolo:
             two_detector += 1
         elif in_scrfd:
