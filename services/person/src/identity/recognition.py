@@ -72,8 +72,11 @@ class Baseline:
         self.accepted = None
         self.generation += 1
 
+    def decide(self, vector):
+        return decision(self.scores(vector), *self.thresholds)
+
     def observe(self, vector, weight, now):
-        instantaneous = decision(self.scores(vector), *self.thresholds)
+        instantaneous = self.decide(vector)
         if self.accepted is not None and (instantaneous is None or instantaneous[0] != self.accepted):
             self.reset()
         previous_count = len(self.evidence.samples)
@@ -83,7 +86,7 @@ class Baseline:
             self.generation += 1
         if mean is None:
             return None
-        result = decision(self.scores(mean), *self.thresholds)
+        result = self.decide(mean)
         if result is None:
             self.reset()
         else:

@@ -1,15 +1,15 @@
-"""Single-face baseline enrollment and event dispatch."""
-from datetime import datetime, timezone
+"""enroll / run / remove: single-face enrollment, live recognition and person.seen dispatch."""
+from datetime import datetime
 import json
 from pathlib import Path
 import time
 from jsonschema import Draft202012Validator
-from .capture import Capture
-from .events import person_seen
-from .identity.gallery import Gallery
-from .identity.recognition import Baseline, decision
-from .vision.arcface import Vision
-from .storage import file_hash, segment_id
+from ..capture import Capture
+from ..events import person_seen
+from ..identity.gallery import Gallery
+from ..identity.recognition import Baseline, decision
+from ..storage import file_hash, segment_id
+from ..vision.arcface import Vision
 
 
 def execute(args):
@@ -36,10 +36,9 @@ def execute(args):
             raise ValueError('Policy is incompatible with current gallery/model; recalibrate')
         if not policy.get('development_manifest'):
             raise ValueError('Policy must identify its held-out development manifest')
-        
-        is_ensemble = 'conformal' in policy
-        if is_ensemble:
-            from .identity.ensemble import predict
+
+        if 'conformal' in policy:
+            from ..identity.ensemble import EnsembleEngine
             ada_arg = getattr(args, 'ada_gallery', None)
             if ada_arg and Path(ada_arg).is_file():
                 ada_gallery = Gallery(ada_arg, json.loads(Path(ada_arg).read_text())['model'])
@@ -49,50 +48,6 @@ def execute(args):
                     ada_gallery = Gallery(default_ada, json.loads(default_ada.read_text())['model'])
                 else:
                     ada_gallery = gallery
-
-            class EnsembleEngine:
-                def __init__(self, g_arc, g_ada, pol):
-                    self.g_arc = g_arc
-                    self.g_ada = g_ada
-                    self.policy = pol
-                    from .identity.recognition import Evidence
-                    self.evidence = Evidence()
-                    self.accepted = None
-                    self.generation = 0
-
-                def reset(self):
-                    self.evidence.clear()
-                    self.accepted = None
-                    self.generation += 1
-
-                def _evaluate(self, vec):
-                    arc_scores = self.g_arc.scores(vec)
-                    ada_scores = self.g_ada.scores(vec)
-                    res = predict(self.policy, arc_scores, ada_scores)
-                    if res['state'] == 'known':
-                        return res['person_id'], float(res['confidence'])
-                    elif res['state'] == 'unknown':
-                        return None, 0.0
-                    return None
-
-                def observe(self, vector, weight, now):
-                    instant = self._evaluate(vector)
-                    if self.accepted is not None and (instant is None or instant[0] != self.accepted):
-                        self.reset()
-                    prev_cnt = len(self.evidence.samples)
-                    mean = self.evidence.observe(vector, weight, now)
-                    if prev_cnt and len(self.evidence.samples) == 1:
-                        self.accepted = None
-                        self.generation += 1
-                    if mean is None:
-                        return None
-                    res = self._evaluate(mean)
-                    if res is None:
-                        self.reset()
-                    else:
-                        self.accepted = res[0]
-                    return res
-
             engine = EnsembleEngine(gallery, ada_gallery, policy)
         else:
             accept, reject, margin = (policy[key] for key in ('accept', 'reject', 'margin'))
@@ -133,6 +88,7 @@ def execute(args):
                     previous_enrollment_time = None
                     track = None
                     continue
+                # Video presentation time, rather than decode speed, governs replay evidence.
                 observed_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00')).timestamp() if origin else received
                 if observed_time - last_sample < .2 - 1e-6:
                     continue
@@ -160,8 +116,6 @@ def execute(args):
                         print('Enrollment saved locally; no source images retained')
                         return
                     continue
-                # Video presentation time, rather than decode speed, governs replay evidence.
-                observed_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00')).timestamp() if origin else received
                 result = engine.observe(vector, weight, observed_time)
                 if result is None:
                     continue

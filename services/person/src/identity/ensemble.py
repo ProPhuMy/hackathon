@@ -7,6 +7,7 @@ import itertools
 import re
 import numpy as np
 from sklearn.linear_model import LogisticRegression
+from .recognition import Baseline, Evidence
 
 
 def _scores(arcface, adaface, identities):
@@ -210,19 +211,19 @@ def evaluate(policy, data):
     return report
 
 
-def execute(args):
-    import json
-    from ..storage import atomic_json
-    if args.command == 'calibrate-scores':
-        development = json.loads(args.development.read_text())
-        conformal = json.loads(args.conformal.read_text())
-        policy = fit_policy(development, conformal)
-        atomic_json(args.output, policy)
-        report = dict(enrolled_classes=len(policy['identities']),
-                      development_encounters=len(development['encounters']),
-                      conformal_counts={k: len(v) for k, v in policy['conformal'].items()})
-    else:
-        policy = json.loads(args.policy.read_text())
-        report = evaluate(policy, json.loads(args.scores.read_text()))
-        atomic_json(args.output, report)
-    print(json.dumps(report, indent=2))
+class EnsembleEngine(Baseline):
+    """Baseline's evidence/reset policy, with the calibrated ensemble deciding each step."""
+    def __init__(self, arcface, adaface, policy):
+        self.arcface, self.adaface, self.policy = arcface, adaface, policy
+        self.evidence = Evidence()
+        self.accepted = None
+        self.generation = 0
+
+    def decide(self, vector):
+        # Known bug, kept: the AdaFace gallery is scored with the ArcFace vector (no AdaFace encoder runs live).
+        result = predict(self.policy, self.arcface.scores(vector), self.adaface.scores(vector))
+        if result['state'] == 'known':
+            return result['person_id'], float(result['confidence'])
+        if result['state'] == 'unknown':
+            return None, 0.
+        return None

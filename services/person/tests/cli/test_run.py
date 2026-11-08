@@ -1,10 +1,10 @@
 """Exercise orchestration with deterministic observations; no hardware required."""
-from datetime import datetime, timezone
 import json
 from types import SimpleNamespace
 import numpy as np
 import pytest
-from src import runtime
+from conftest import SCHEMA_PATH, fake_capture
+from src.cli import run as runtime
 from src.identity.gallery import Gallery
 
 
@@ -15,13 +15,7 @@ def setup_runtime(tmp_path, monkeypatch, frames, command='run'):
             pass
         def single_face(self, image):
             return image
-    class Capture:
-        def __init__(self, *args):
-            pass
-        def __enter__(self):
-            return iter(frames)
-        def __exit__(self, *args):
-            pass
+    Capture = fake_capture(frames)
     monkeypatch.setattr(runtime, 'Vision', Vision)
     monkeypatch.setattr(runtime, 'Capture', Capture)
     monkeypatch.setattr(runtime.time, 'monotonic', lambda: 100.)
@@ -33,7 +27,7 @@ def setup_runtime(tmp_path, monkeypatch, frames, command='run'):
     return SimpleNamespace(command=command, detector=None, recognizer=None, gallery=gallery.path,
                            person_id='b', source='fake', replay_origin='2026-01-01T00:00:00Z',
                            broker=None, policy=policy,
-                           schema=runtime.Path('../../contracts/person.seen.schema.json'))
+                           schema=SCHEMA_PATH)
 
 
 def frame(t, vector=(1., 0.)):
@@ -126,24 +120,17 @@ def test_reconnect_boundary_requires_fresh_evidence_and_segment(tmp_path, monkey
 
 
 def test_ensemble_runtime_conformal_decision_and_dispatch(tmp_path, monkeypatch, capsys):
-    from src.identity.gallery import Gallery
     class Vision:
         signature = 'test-model'
         def __init__(self, *args):
             pass
         def single_face(self, image):
             return image
-    class Capture:
-        def __init__(self, *args):
-            pass
-        def __enter__(self):
-            # 6 frames at 0.1s interval to span >= 0.4s
-            return iter([
-                ((np.array([1., 0.]), 1.), 100., f'2026-01-01T00:00:0{i:05.3f}Z')
-                for i in range(6)
-            ])
-        def __exit__(self, *args):
-            pass
+    # 6 frames at 0.1s interval to span >= 0.4s
+    Capture = fake_capture([
+        ((np.array([1., 0.]), 1.), 100., f'2026-01-01T00:00:0{i:05.3f}Z')
+        for i in range(6)
+    ])
 
     monkeypatch.setattr(runtime, 'Vision', Vision)
     monkeypatch.setattr(runtime, 'Capture', Capture)
@@ -182,7 +169,7 @@ def test_ensemble_runtime_conformal_decision_and_dispatch(tmp_path, monkeypatch,
         replay_origin='2026-01-01T00:00:00Z',
         broker=None,
         policy=policy_path,
-        schema=runtime.Path('../../contracts/person.seen.schema.json')
+        schema=SCHEMA_PATH
     )
 
     runtime.execute(args)

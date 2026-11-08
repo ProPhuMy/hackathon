@@ -1,6 +1,5 @@
 """Empirical ArcFace baseline tuning; no ensemble or conformal claims."""
 import itertools
-import numpy as np
 from ..identity.recognition import Baseline
 
 
