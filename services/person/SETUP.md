@@ -175,3 +175,24 @@ Next physical test: keep the camera view empty for two seconds, then let only
 the enrolled participant enter and remain visible for eight seconds. Independent
 development and test encounters plus a different consenting stranger are still
 needed. Camera processes have exited after these attempts.
+
+## Improved-framing development encounter
+
+A subsequent camera check found a fully visible face in 60/60 single-face
+frames, with median width 354.6 pixels, compared with 41–59 pixels in the earlier
+poorly framed clip. The existing enrollment was retained: clean live samples
+had cosine similarity 0.770–0.828 to it. Repeated-frame inference was deterministic
+and matched InsightFace's own `get` path (cosine >0.99999); the weak earlier
+results did not justify changing recognition thresholds.
+
+After the participant moved locations, a new eight-second development encounter
+was captured following a countdown. All 37 decoded observations were usable;
+similarity to the enrollment ranged 0.780–0.828 (median 0.806). These are similarity
+diagnostics, not recognition accuracy or calibrated acceptance probabilities.
+The local development manifest uses this clip and excludes the poor-framing
+clip. Raw videos and per-frame host receipt timestamps remain under ignored
+`models/data/`; AVI presentation is nominally 5 FPS, not original camera PTS.
+
+43 automated tests passed again. Calibration still requires independent stranger
+encounters, and final accuracy requires untouched test encounters. No thresholds
+were fitted from this one known-person clip. Capture processes have exited.
