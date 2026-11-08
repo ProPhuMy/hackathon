@@ -173,9 +173,13 @@ code { background: rgba(94, 242, 255, 0.12); padding: 0.1em 0.4em; border-radius
 .team { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px; margin-top: 30px; }
 .member { --accent: var(--cyan); padding: 26px; text-align: center; }
 .avatar {
-  display: grid; place-items: center; width: 92px; height: 92px; margin: 0 auto 12px; border-radius: 50%;
-  font-size: 40px; font-weight: 800; color: var(--bg); background: linear-gradient(135deg, var(--cyan), var(--violet));
+  display: block; width: 132px; height: 132px; margin: 0 auto 14px; border-radius: 50%; object-fit: cover;
+  border: 4px solid var(--cyan); box-shadow: 0 0 28px rgba(94, 242, 255, 0.5);
 }
+.video-fallback { position: absolute; inset: 0; display: grid; place-items: center; text-decoration: none; }
+.video-fallback img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.55; }
+.video-fallback span { position: relative; padding: 14px 26px; border-radius: 999px; font-weight: 800; color: #fff;
+  background: linear-gradient(90deg, var(--pink), var(--violet)); box-shadow: 0 0 30px rgba(255, 95, 210, 0.6); }
 .member h3 { margin: 0; font-size: 24px; }
 .member p { margin: 4px 0 0; color: var(--dim); }
 

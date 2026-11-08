@@ -2,6 +2,15 @@
 document.documentElement.classList.add("js");
 const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+// YouTube refuses to play embeds on pages opened as local files (player "Error 153"): show the thumbnail and a
+// link instead. Served over http(s) (GitHub Pages, `python3 -m http.server`) the embedded player is used.
+if (location.protocol === "file:") {
+  const box = document.querySelector(".video");
+  box.innerHTML =
+    '<a class="video-fallback" href="https://youtu.be/pDQ0bsB9lUE" target="_blank" rel="noopener">' +
+    '<img src="assets/og-image.jpg" alt="FridgeCheck demo video thumbnail" /><span>▶ Watch the demo on YouTube</span></a>';
+}
+
 // Starfield: three parallax layers drifting left, like the dashboard and the demo video.
 const canvas = document.getElementById("stars");
 const ctx = canvas.getContext("2d");
