@@ -40,7 +40,7 @@ def test_segmenter_calls_sam_with_bboxes_and_returns_masks(monkeypatch):
     monkeypatch.setattr("ultralytics.SAM", mock_sam_cls)
 
     seg = Segmenter()
-    mock_sam_cls.assert_called_once_with("sam2.1_b.pt")
+    mock_sam_cls.assert_called_once_with("models/sam2.1_b.pt")
 
     frame = np.zeros((100, 100, 3), dtype=np.uint8)
     masks = seg(frame, [item1, item2])

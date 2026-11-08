@@ -57,7 +57,7 @@ class Detector:
         self,
         prompts: list[str],
         hand_label: str = "hand",
-        weights: str = "yoloe-11s-seg.pt",
+        weights: str = "models/yoloe-11s-seg.pt",
     ) -> None:
         # Import ultralytics inside __init__ so importing detect.py stays fast for unit tests.
         from ultralytics import YOLOE

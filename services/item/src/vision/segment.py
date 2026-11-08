@@ -6,7 +6,7 @@ from ..core.geometry import Track
 
 
 class Segmenter:
-    def __init__(self, weights: str = "sam2.1_b.pt") -> None:
+    def __init__(self, weights: str = "models/sam2.1_b.pt") -> None:
         from ultralytics import SAM
 
         self.model = SAM(weights)
