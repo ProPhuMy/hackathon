@@ -33,7 +33,7 @@ Per frame:
 
    When the door closes, an unpaired `in` while holding → PUT; an unpaired `out` while holding → TAKE.
 6. **Which item:** PUT creates a new `item_id` in a gallery saved to disk. TAKE matches against items currently in the gallery (v1 by label; v2 by DINOv2 + color histogram embedding, Hungarian assignment when several items leave in one session). No match → `item_id: "unknown"`, low confidence.
-7. **Publish** `item.event` (contract unchanged). `ts` is the crossing where the item was held: the `in` crossing for PUT, the `out` crossing for TAKE.
+7. **Publish** `item.event` (contract unchanged). `ts` is the moment the hand went **in** for both PUT and TAKE: at that moment the person still faces the face camera, while during rummaging they turn away and the backend only matches a face seen within ~3 s (`sigma_ms = 1000`, null prior −2.0). A TAKE whose `in` crossing was never seen (flushed at door close) keeps its `out` time.
 
 ## Goals
 
