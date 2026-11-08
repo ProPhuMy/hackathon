@@ -73,14 +73,7 @@ Creates `fridge-dev` with port mapping `127.0.0.1:18080:30080@server:0` and expo
 ```bash
 ./infra/k8s/scripts/build-import.sh
 ```
-Builds `fridge-backend:dev` from repository root using `infra/k8s/backend.Dockerfile` and imports it into `fridge-dev`. If `fridge-dashboard:dev` exists locally, it imports it; otherwise it notifies the operator and skips.
-
-> [!NOTE]
-> **Dashboard Image Dependency**: The dashboard Dockerfile and frontend build are owned by Role 4 under `dashboard/`. If you wish to test the dashboard, build it first via:
-> ```bash
-> docker build -t fridge-dashboard:dev --build-arg VITE_API_BASE=/api dashboard/
-> ```
-> Then run `build-import.sh`.
+Builds `fridge-backend:dev` (from `infra/k8s/backend.Dockerfile`) and `fridge-dashboard:dev` (from `dashboard/Dockerfile`, `VITE_API_BASE=/api`), then imports both into `fridge-dev`.
 
 ### 3. Deploy Stack in Dependency Order
 ```bash

@@ -1,5 +1,22 @@
 @import url('/fonts/fridge-pixel.css');
-:root{font-family:Arial,Helvetica,sans-serif;color:#292b23;background:#eeece3;font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;font-weight:400}
+:root{
+  --void: #04050d;
+  --deep: #0a0e27;
+  --violet: #6a2fd1;
+  --magenta: #d8418f;
+  --cyan: #3fd6ff;
+  --ember: #ff8a4c;
+  --star: #eef1ff;
+  --muted: #8d95bd;
+
+  font-family:Arial,Helvetica,sans-serif;
+  color:var(--star);
+  background:var(--void);
+  font-synthesis:none;
+  text-rendering:optimizeLegibility;
+  -webkit-font-smoothing:antialiased;
+  font-weight:400;
+}
 *{box-sizing:border-box}
 body{margin:0}
 button,input,select{font:inherit}
@@ -7,10 +24,10 @@ button,a,input,select{-webkit-tap-highlight-color:transparent}
 button{cursor:pointer}
 button{color:inherit}
 a{color:inherit}
-button:focus-visible,a:focus-visible{outline:3px solid #d86539;outline-offset:6px}
-input:focus-visible,select:focus-visible{outline:2px solid #d86539;outline-offset:3px}
+button:focus-visible,a:focus-visible{outline:3px solid var(--ember);outline-offset:6px}
+input:focus-visible,select:focus-visible{outline:2px solid var(--ember);outline-offset:3px}
 button{border:0}
 button:disabled{cursor:default}
-::selection{background:#d5e3ac;color:#292b23}
+::selection{background:rgba(106,47,209,0.45);color:var(--star)}
 h1,h2,h3,p{margin:0}
 button{touch-action:manipulation}

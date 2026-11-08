@@ -15,14 +15,15 @@ npm run build
 npm run lint
 ```
 
-Click the fridge or “Open the fridge” for a 3.8-second orbit, door-opening,
-and dolly into a full-screen interior. Navigation and the invitation fade away.
-The top-left “Leave the fridge” control or Escape reverses the same path, even
-mid-entry. Select shelves with their buttons, the mouse wheel, or ↑ / ↓.
-Select a food model or its labeled button for owner and item details. Top-left navigation opens inventory (search and owner
-filter), event history (search), alerts (event inspection), and people panels.
-Escape closes a panel first, then exits the fridge. Focus returns to the opening
-control after exit. Reduced-motion preferences switch directly between views.
+Click the fridge or “Open the wormhole” to trigger a space journey. The fridge
+drifts and stretches into an opening wormhole, travels across folded space, and
+emerges into an unfamiliar quadrant where its doors open and items drift adrift.
+Select a floating food item or its labeled button for owner and item details.
+“Return home” or Escape reverses the entire journey, even mid-flight, returning
+to deep-space idle. Top-left navigation opens inventory (search and owner filter),
+event history (search), alerts (event inspection), and people panels. Escape
+closes an open panel first, then returns home. Reduced-motion preferences switch
+directly between idle and floating scenes.
 
 All inventory, people and events currently use illustrative local demo data.
 Adding a demo person lasts for the current page session; live registration,
@@ -38,22 +39,38 @@ TanStack Router now owns `/`, `/inventory`, `/history`, `/alerts`, `/people`,
 fridge scene while panels follow the URL, including direct links and back/forward.
 Run `node tools/checks/routes.mjs` for the focused route checks.
 
-`src/Fridge3D.jsx` renders `public/models/mini-fridge.glb` with React Three Fiber.
+`src/Fridge3D.jsx` renders `src/assets/mini-fridge.glb` with React Three Fiber.
 The model was authored through the community MCP for Blender server. Its
 53 nodes contain roughly 99,000 modeled polygons, merged by material and parent
 for fewer draw calls. Details include folded satin-metal panels, a recessed grip,
 layered seals, glass shelves, a crisper drawer, a freezer flap, vents, thermostat,
 LED strips, and six separately selectable food groups with printed packaging.
 The self-contained GLB is about 6.3 MB. `DoorPivot` owns the door and `Food_0`
-through `Food_5` carry item indices. The renderer remains lazy-loaded.
+through `Food_5` carry item indices. The renderer remains lazy-loaded. Vite emits a content-hashed model URL;
+`node tools/checks/model-asset.mjs` verifies the production artifact after a build.
 WebGL/model errors retain the photograph and inventory access.
 
-`src/fridgeMotion.mjs` defines the reversible camera path. The door clears before
-the camera moves through the opening. Each shelf has its own close-up viewpoint;
-portrait framing backs away slightly to keep both food items visible. Hover adds
-a subtle scale response, and the inside camera has restrained pointer parallax.
-Run `node tools/checks/fridge-motion.mjs` for reversal, reduced-motion, camera
-clearance, aspect ratio, and exported-model checks.
+`src/spaceJourney.mjs` defines the reversible space journey playhead. A single
+`progress` value (0→1, ~10 s forward, ~5 s return) drives the fridge through a
+wormhole portal via a C1-continuous Hermite camera and fridge dive into folded space,
+settles at the destination quadrant (0.70→0.80), trembles and swells with ember seam
+glow during charge (0.80→0.86), and explodes at 0.86 into metal shards and an aspect-fitted
+3D ellipsoid cloud of floating food items. Returning home reverses the entire sequence
+smoothly. The camera never enters the fridge interior. `sampleJourney` returns camera,
+fridge, portal, tunnel, charge, burst, and seam light states for every progress value
+and aspect ratio. `advanceJourney` handles forward, reverse, background-tab resume,
+and reduced-motion instant jumps. In dev mode, appending `?progress=<0..1>` freezes
+the playhead at that exact progress for inspection.
+
+`src/Fridge3D.jsx` consumes the sample every frame and applies it to the model,
+ejected items, and FX components. At burst = 0.02, the cabinet meshes swap cleanly
+behind the fireball for FX shards. Items with demo slot mappings use the GLB food meshes;
+other items get generated geometry. Hover shows a name tag; click opens the item
+detail route. Clicking the fridge at idle triggers the journey.
+
+Run `node tools/checks/space-journey.mjs` for playhead reversal, phase boundaries,
+camera speed continuity, non-decreasing dive, fridge portal crossing, charge/burst timing,
+aspect-ratio NDC coverage, and GLB-structure checks.
 
 The editable Blender source and rebuild scripts are in `tools/blender/`.
 Blender must be running with its MCP addon listening on loopback port 9876.
@@ -71,17 +88,46 @@ uv run --with mcp python dashboard/tools/blender/remodel_via_mcp.py --render
 
 Deployments must serve `index.html` for frontend routes. This remains a Vite
 SPA with TanStack Router; it does not add TanStack Start server rendering.
-The Three.js renderer adds an approximately 283 KB gzipped lazy-loaded chunk.
+The Three.js renderer and space effects add an approximately 295 KB gzipped lazy-loaded chunk.
 
 ## Demo model mapping
 
 `src/itemMapping.js` maps the six fixed model slots to demo IDs `043`–`048`.
-Mesh inspection and shelf buttons both resolve by ID, so inventory order can
-change safely. Missing records are not opened and their shelf buttons are omitted;
-new, unmapped records remain available in Inventory. Mesh picking and hover are
-limited to the selected shelf after its camera transition settles.
+`Fridge3D.jsx` inverts it: a mapped item flies out as its GLB food model, any
+other item as a generated capsule in its colour, and model slots with no matching
+item stay hidden. Floating items and their DOM buttons both resolve by ID, so
+inventory order can change safely. Picking and hover work only once the items
+have settled (progress 1).
 
 Run `node tools/checks/mapping.mjs` for the mapping checks. The GLB retains its
 legacy `itemIndex` metadata; live server IDs and dynamic model placement still
 require the backend contract. See [the team review](docs/team-dispatch.md) for
 accepted changes, browser evidence, and remaining dependencies.
+
+## Live backend
+
+To connect the dashboard to the real backend service:
+1. Start the backend service listening on port 8000.
+2. Run `npm run dev`. The Vite development server automatically proxies `/api` calls and the Server-Sent Events stream to `http://localhost:8000`.
+3. In production builds, configure the backend base URL using the `VITE_API_BASE` environment variable if not serving from `/api`.
+4. If the backend is unreachable, the dashboard automatically falls back to illustrative demo data and continues retrying in the background.
+
+## Production image
+
+Build the nonroot production image from the repository root:
+
+```sh
+docker build -t fridge-dashboard:dev --build-arg VITE_API_BASE=/api dashboard
+```
+
+Run locally against a backend running on host port 8000:
+
+```sh
+docker run --rm -p 127.0.0.1:8081:8080 \
+  -e BACKEND_HOST=host.docker.internal \
+  -e BACKEND_PORT=8000 \
+  fridge-dashboard:dev
+```
+
+In Kubernetes (`infra/k8s/base/dashboard.yaml`), `BACKEND_HOST` is configured to point to the backend service (`backend.fridge.svc.cluster.local`).
+

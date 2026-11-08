@@ -104,6 +104,7 @@ independent review are accepted. Missing teammate services remain explicit gates
 for end-to-end live completion. Infrastructure then follows its own detailed
 brief → read-only plan → lead review → agy implementation → lead review cycle.
 Khang's infrastructure scope is infra/k8s. Shared infra/docker-compose.yml belongs
-to Dang. The project targets local Mac/k3d, not cloud; vision inference stays on
-macOS. Start from one working event-bus node before replication, autoscaling or
+to Dang. The project keeps the demo and k3d on the Mac; the newly merged overview
+allows model inference on a teammate-managed cloud GPU with Mac thin clients.
+Khang's Kubernetes work hosts only backend, dashboard and lightweight CPU workers. Start from one working event-bus node before replication, autoscaling or
 observability expansion. No video work in this phase.

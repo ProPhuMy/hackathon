@@ -1,0 +1,44 @@
+server {
+    listen 8080;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Static server health check for k8s readiness probe
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 'ok';
+    }
+
+    # Reverse proxy /api/ to backend service and strip prefix (including SSE)
+    location ^~ /api/ {
+        proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT}/;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 1h;
+        add_header Cache-Control "no-store" always;
+    }
+
+    # Vite content-hashed static assets (cache long-term)
+    location ^~ /assets/ {
+        try_files $uri =404;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    # Missing static files must 404 rather than falling back to index.html
+    location ~* \.(js|css|map|png|jpg|jpeg|svg|ico|webp|glb|gltf|woff2?|json|txt)$ {
+        try_files $uri =404;
+    }
+
+    # Single Page Application (SPA) client-side routing fallback
+    location / {
+        try_files $uri /index.html;
+        add_header Cache-Control "no-store" always;
+    }
+}
