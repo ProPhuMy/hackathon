@@ -6,6 +6,7 @@ from typing import Any
 import cv2
 import numpy as np
 
+from fridge_item.door import measure_brightness
 from fridge_item.geometry import DoorLine, Point
 from fridge_item.stream import iter_frames
 
@@ -165,14 +166,18 @@ def calibrate(source: str, out_path: Path | str = "config.json") -> Config:
         if last_frame is None:
             raise ValueError(f"Frame source exhausted before sampling: {prompt_text}")
 
-        roi_crop = last_frame[ry : ry + rh, rx : rx + rw]
-        return float(np.mean(roi_crop))
+        return measure_brightness(last_frame, roi)
 
     try:
         c = sample_brightness("Door CLOSED - press any key to sample", initial_frame=first_frame)
         o = sample_brightness("Door OPEN - press any key to sample", initial_frame=None)
     finally:
         cv2.destroyAllWindows()
+
+    if (o - c) < 10:
+        raise ValueError(
+            f"Door did not get brighter when opened (closed={c:.1f}, open={o:.1f}, diff={o - c:.1f} < 10)"
+        )
 
     door_on = c + 0.6 * (o - c)
     door_off = c + 0.4 * (o - c)

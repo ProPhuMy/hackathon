@@ -61,8 +61,8 @@ class LatestFrameReader:
                                 with self._lock:
                                     self._latest = (frame, ts)
                                     self._new_frame = True
-            except Exception:
-                pass
+            except Exception as e:
+                print(e, flush=True)
             finally:
                 if self._session:
                     try:

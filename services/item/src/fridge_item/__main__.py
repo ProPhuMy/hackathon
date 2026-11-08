@@ -42,6 +42,7 @@ def probe_command(
 ) -> None:
     """Run detector and overlay on clip without logic, writing MP4 at 15 fps."""
     from fridge_item.config import load
+    from fridge_item.door import DoorDetector
     from fridge_item.draw import overlay
 
     cfg = load(config_path)
@@ -59,9 +60,7 @@ def probe_command(
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer: cv2.VideoWriter | None = None
 
-    rx, ry, rw, rh = cfg.roi
-    has_roi = rw > 0 and rh > 0
-    door_open = True
+    door_detector = DoorDetector(roi=cfg.roi, on=cfg.door_on, off=cfg.door_off)
 
     try:
         for frame, _ in iter_frames(clip):
@@ -69,13 +68,7 @@ def probe_command(
                 h, w = frame.shape[:2]
                 writer = cv2.VideoWriter(str(out_file), fourcc, 15.0, (w, h))
 
-            if has_roi and ry + rh <= frame.shape[0] and rx + rw <= frame.shape[1]:
-                roi_crop = frame[ry : ry + rh, rx : rx + rw]
-                brightness = float(np.mean(roi_crop))
-                if brightness >= cfg.door_on:
-                    door_open = True
-                elif brightness <= cfg.door_off:
-                    door_open = False
+            door_open = door_detector.update(frame)
 
             tracks = detector_model(frame)
             annotated = overlay(frame, tracks, cfg.line, door_open, events=[])
@@ -159,6 +152,10 @@ def run_command(
         out_file.parent.mkdir(parents=True, exist_ok=True)
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
 
+    def on_delivery(err, _msg=None):
+        if err:
+            print(f"kafka delivery failed: {err}", flush=True)
+
     frame_idx = 0
     try:
         for frame, ts in iter_frames(source):
@@ -174,6 +171,7 @@ def run_command(
                         "item.event",
                         key=ev["event_id"],
                         value=json.dumps(ev, ensure_ascii=False),
+                        on_delivery=on_delivery,
                     )
                     producer.poll(0)
                 if debug_video is not None:
@@ -230,13 +228,21 @@ def run_command(
                         "item.event",
                         key=ev["event_id"],
                         value=json.dumps(ev, ensure_ascii=False),
+                        on_delivery=on_delivery,
                     )
                     producer.poll(0)
         finally:
-            if producer is not None:
-                producer.flush()
-            if writer is not None:
-                writer.release()
+            try:
+                if writer is not None:
+                    writer.release()
+            finally:
+                if producer is not None:
+                    remaining = producer.flush(10)
+                    if remaining:
+                        print(
+                            f"warning: kafka producer flush timed out with {remaining} messages remaining",
+                            flush=True,
+                        )
 
 
 def evaluate_command(

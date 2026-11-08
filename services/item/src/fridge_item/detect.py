@@ -69,7 +69,9 @@ class Detector:
         self.model.set_classes(self.prompts, self.model.get_text_pe(self.prompts))
 
     def __call__(self, frame: np.ndarray) -> list[Track]:
-        results = self.model.track(frame, persist=True, verbose=False)
+        results = self.model.track(
+            frame, persist=True, verbose=False, tracker="bytetrack.yaml"
+        )
         if not results:
             return []
         result = results[0]

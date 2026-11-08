@@ -229,3 +229,43 @@ def test_calibrate_logic(tmp_path: Path):
     # door_off = 50 + 0.4 * 100 = 90.0
     assert pytest.approx(cfg.door_on) == 110.0
     assert pytest.approx(cfg.door_off) == 90.0
+
+
+def test_calibrate_insufficient_brightness_diff_raises(tmp_path: Path):
+    out_file = tmp_path / "config.json"
+    dummy_frame = np.full((100, 100, 3), 40, dtype=np.uint8)
+    closed_frame = np.full((100, 100, 3), 100, dtype=np.uint8)
+    open_frame = np.full((100, 100, 3), 105, dtype=np.uint8)
+
+    frames = [
+        (dummy_frame, "2026-11-07T19:40:00.000Z"),
+        (closed_frame, "2026-11-07T19:40:00.066Z"),
+        (open_frame, "2026-11-07T19:40:00.133Z"),
+    ]
+
+    mouse_callbacks = []
+
+    def fake_set_mouse_callback(winname, callback, param=None):
+        mouse_callbacks.append(callback)
+
+    def fake_wait_key(delay):
+        if mouse_callbacks:
+            cb = mouse_callbacks[0]
+            cb(cv2.EVENT_LBUTTONDOWN, 15, 25, 0, None)
+            cb(cv2.EVENT_LBUTTONDOWN, 85, 25, 0, None)
+            cb(cv2.EVENT_LBUTTONDOWN, 50, 70, 0, None)
+        return 13
+
+    with patch("fridge_item.config.iter_frames", return_value=iter(frames)), \
+         patch("cv2.selectROI", return_value=(10, 20, 30, 40)), \
+         patch("cv2.namedWindow"), \
+         patch("cv2.imshow"), \
+         patch("cv2.destroyWindow"), \
+         patch("cv2.destroyAllWindows"), \
+         patch("cv2.setMouseCallback", side_effect=fake_set_mouse_callback), \
+         patch("cv2.waitKey", side_effect=fake_wait_key):
+
+        with pytest.raises(ValueError, match="brighter"):
+            calibrate("dummy_source", out_file)
+
+    assert not out_file.exists()

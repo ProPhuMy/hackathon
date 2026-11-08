@@ -576,14 +576,16 @@ def test_cli_run_command_kafka_publish(tmp_path: Path, monkeypatch):
         dry_run=False,
     )
 
+    from unittest.mock import ANY
     mock_producer_cls.assert_called_once_with({"bootstrap.servers": "custom_broker:19092"})
     mock_producer_instance.produce.assert_called_once_with(
         "item.event",
         key=test_ev["event_id"],
         value=json.dumps(test_ev, ensure_ascii=False),
+        on_delivery=ANY,
     )
     mock_producer_instance.poll.assert_called_once_with(0)
-    mock_producer_instance.flush.assert_called_once()
+    mock_producer_instance.flush.assert_called_once_with(10)
 
 
 def test_cli_run_command_debug_video(tmp_path: Path, monkeypatch):
@@ -809,8 +811,83 @@ def test_shutdown_cleanup_on_flush_error(tmp_path: Path, monkeypatch):
             debug_video=str(out_video),
         )
 
-    mock_producer_instance.flush.assert_called_once()
+    mock_producer_instance.flush.assert_called_once_with(10)
     mock_writer.release.assert_called_once()
+
+
+def test_shutdown_order_and_flush_warning_and_delivery_callback(tmp_path: Path, monkeypatch, capsys):
+    import sys
+    from unittest.mock import MagicMock
+    from fridge_item.__main__ import run_command
+    from fridge_item.config import Config, save
+    from fridge_item.events import item_event
+
+    cfg_file = tmp_path / "cfg.json"
+    line = DoorLine(p1=(0.0, 100.0), p2=(200.0, 100.0), inside=(100.0, 200.0))
+    save(Config(roi=(0, 0, 50, 50), line=line, door_on=100.0, door_off=50.0), cfg_file)
+
+    frame = np.full((100, 100, 3), 10, dtype=np.uint8)
+    monkeypatch.setattr("fridge_item.detect.Detector", MagicMock())
+    monkeypatch.setattr(
+        "fridge_item.__main__.iter_frames",
+        lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
+    )
+
+    ev = item_event("PUT", "item-1", "coke", 0.9, ts="2026-11-07T20:00:01.000Z")
+    monkeypatch.setattr(
+        "fridge_item.pipeline.ItemPipeline.process",
+        lambda self, f, ts: [ev],
+    )
+    monkeypatch.setattr(
+        "fridge_item.pipeline.ItemPipeline.close",
+        lambda self: [],
+    )
+
+    call_order = []
+    mock_writer = MagicMock()
+    mock_writer.release.side_effect = lambda: call_order.append("release")
+    monkeypatch.setattr("cv2.VideoWriter", MagicMock(return_value=mock_writer))
+
+    mock_producer_instance = MagicMock()
+    mock_producer_instance.flush.side_effect = lambda timeout=None: (call_order.append(f"flush({timeout})"), 2)[1]
+    mock_producer_cls = MagicMock(return_value=mock_producer_instance)
+
+    mock_kafka_mod = MagicMock()
+    mock_kafka_mod.Producer = mock_producer_cls
+    monkeypatch.setitem(sys.modules, "confluent_kafka", mock_kafka_mod)
+
+    out_video = tmp_path / "out.mp4"
+    run_command(
+        source="dummy_src",
+        config_path=str(cfg_file),
+        gallery_path=str(tmp_path / "gallery.json"),
+        broker="localhost:19092",
+        dry_run=False,
+        debug_video=str(out_video),
+    )
+
+    # 1. Writer release before producer flush
+    assert call_order == ["release", "flush(10)"]
+    mock_producer_instance.flush.assert_called_once_with(10)
+    mock_writer.release.assert_called_once()
+
+    # 2. Warning mentioning 2
+    captured = capsys.readouterr()
+    combined_output = captured.out + captured.err
+    assert "2" in combined_output
+    assert "warning" in combined_output.lower()
+
+    # 3. on_delivery callback passed to produce
+    produce_calls = mock_producer_instance.produce.call_args_list
+    assert len(produce_calls) >= 1
+    on_delivery_cb = produce_calls[0].kwargs.get("on_delivery")
+    assert callable(on_delivery_cb)
+
+    # Test delivery callback prints "kafka delivery failed: <err>" when err is set
+    capsys.readouterr()
+    on_delivery_cb("broker disconnected", None)
+    cb_out = capsys.readouterr().out
+    assert "kafka delivery failed: broker disconnected" in cb_out
 
 
 def test_pipeline_shelf_check_put_when_hand_logic_silent(tmp_path: Path):

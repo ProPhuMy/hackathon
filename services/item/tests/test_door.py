@@ -51,3 +51,25 @@ def test_door_2d_grayscale_and_threshold_edges():
 
     frame_closed = np.full((20, 20), 24, dtype=np.uint8)  # < off -> closes
     assert detector.update(frame_closed) is False
+
+
+def test_measure_brightness_helper_matches_door_detector_colored_frame():
+    from fridge_item.door import measure_brightness
+
+    roi = (10, 10, 20, 20)
+    # Colored frame: B=200, G=50, R=20
+    frame = np.zeros((100, 100, 3), dtype=np.uint8)
+    frame[10:30, 10:30] = [200, 50, 20]
+
+    val = measure_brightness(frame, roi)
+
+    # Naive BGR mean is (200 + 50 + 20) / 3 = 90.0, which differs from grayscale mean (~58.1)
+    bgr_mean = float(np.mean(frame[10:30, 10:30]))
+    assert abs(bgr_mean - val) > 10.0
+
+    # DoorDetector with on threshold just below and just above val
+    det_below = DoorDetector(roi=roi, on=val - 0.5, off=0.0)
+    assert det_below.update(frame) is True
+
+    det_above = DoorDetector(roi=roi, on=val + 0.5, off=0.0)
+    assert det_above.update(frame) is False

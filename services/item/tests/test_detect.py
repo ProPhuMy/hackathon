@@ -159,7 +159,9 @@ def test_detector_mocked():
         dummy_frame = np.zeros((100, 100, 3), dtype=np.uint8)
         tracks = detector(dummy_frame)
 
-        mock_model.track.assert_called_once_with(dummy_frame, persist=True, verbose=False)
+        mock_model.track.assert_called_once_with(
+            dummy_frame, persist=True, verbose=False, tracker="bytetrack.yaml"
+        )
         assert len(tracks) == 1
         assert tracks[0].id == 1
         assert tracks[0].kind == "hand"

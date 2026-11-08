@@ -99,3 +99,28 @@ def test_record_command(tmp_path):
     assert out_video.exists()
     assert out_video.stat().st_size > 0
 
+
+def test_latest_frame_reader_prints_exception_and_retries(capsys):
+    import threading
+
+    attempts = 0
+    second_attempt_event = threading.Event()
+
+    def fake_get(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts >= 2:
+            second_attempt_event.set()
+        raise ConnectionError("connection failed: wrong URL")
+
+    with patch("requests.Session.get", side_effect=fake_get):
+        reader = LatestFrameReader("http://invalid-cam-url/video")
+        try:
+            assert second_attempt_event.wait(timeout=2.5), "Did not retry after failure"
+            assert attempts >= 2
+        finally:
+            reader.stop()
+
+    captured = capsys.readouterr()
+    assert "connection failed: wrong URL" in captured.out
+
