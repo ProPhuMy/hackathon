@@ -1,2 +1,6 @@
+"""fridge_backend package entry point."""
+
+
 def main() -> None:
-    print("Hello from fridge-backend!")
+    from fridge_backend.main import main_entry
+    main_entry()
