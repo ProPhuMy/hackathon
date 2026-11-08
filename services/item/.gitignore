@@ -3,4 +3,5 @@ debug/
 *.mp4
 data/clips/
 .mobileclip*
+mobileclip*.ts
 *.part
