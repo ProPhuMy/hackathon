@@ -270,3 +270,12 @@ code or deployment exists. At user's next wrap-up request, paused all workers.
 Latest candidate preserved locally at dashboard-live-wip4777d76, not integrated
 or pushed. See next-session.md for owner/file/dependency/DoD assignments, exact
 known gaps, worker conversations, test status and runtime recovery. Video deferred.
+
+
+## Infrastructure documentation consolidation — 2026-11-07
+
+At the user’s request, consolidated infrastructure status, ownership, dependencies,
+implementation requirements and acceptance evidence in [infrastructure.md](infrastructure.md).
+The corrected handoff supersedes the initial worker draft, retained in Git history.
+Infrastructure remains planning only. Publishing this documentation on dashboard
+does not merge the local WIP application branches or deploy a cluster.

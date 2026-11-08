@@ -1,5 +1,7 @@
 # Resume checkpoint — 2026-11-07, 23:34 local
 
+Infrastructure documentation is consolidated in [Infrastructure handoff](infrastructure.md). Use it as the current plan; it supersedes the initial review draft.
+
 User requested a wrap-up after authorizing parallel agy work and a30–60minute delivery target. All agy workers are paused. No automatic continuation is scheduled. Resume when asked.
 
 ## Saved state
