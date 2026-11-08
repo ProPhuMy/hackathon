@@ -248,3 +248,121 @@ def test_determinism_input_order_invariance():
     res_hung = assign([ev1, ev2], [p1, p2], cfg, mode="hungarian")
     assert res_hung[0][0] is not None and res_hung[1][0] is not None
     assert assign([ev2, ev1], [p2, p1], cfg, mode="hungarian") == res_hung
+
+
+def test_acceptance_a_fragmented_person_jpda():
+    """Acceptance (a): Person p_01 split into two tracks loses individually to p_02,
+    but wins under JPDA group marginal with confidence >= 0.5.
+    """
+    cfg = DummyConfig()
+    item_conf = 0.95
+    ev = (1000, {"event_id": "i1", "confidence": item_conf})
+
+    p1 = (1000, {"event_id": "p1", "track_id": 1, "person_id": "p_01", "confidence": 0.60})
+    p2 = (1000, {"event_id": "p2", "track_id": 2, "person_id": "p_01", "confidence": 0.60})
+    p3 = (1000, {"event_id": "p3", "track_id": 3, "person_id": "p_02", "confidence": 0.70})
+    persons = [p1, p2, p3]
+
+    candidates = [get_candidates_for_event(ev[1], ev[0], persons, cfg)]
+    hypotheses = enumerate_hypotheses([ev[0]], candidates, cfg.min_gap_ms)
+    marginals, _, _ = compute_marginals(candidates, hypotheses)
+
+    ev_marginals = marginals[0]
+    opt_t1 = next(opt for opt in candidates[0] if opt.track_id == 1)
+    opt_t2 = next(opt for opt in candidates[0] if opt.track_id == 2)
+    opt_t3 = next(opt for opt in candidates[0] if opt.track_id == 3)
+
+    m1 = ev_marginals[opt_t1]
+    m2 = ev_marginals[opt_t2]
+    m3 = ev_marginals[opt_t3]
+
+    # Under old per-track rule: Track 3 (p_02) beats both p_01 tracks,
+    # and either p_01 track's individual confidence product is < 0.5
+    assert m3 > m1 and m3 > m2
+    assert m1 * item_conf < 0.5
+    assert m2 * item_conf < 0.5
+
+    # Summed group marginal of p_01 times item confidence is >= 0.5
+    group_p01 = m1 + m2
+    expected_conf = round(group_p01 * item_conf, 4)
+    assert expected_conf >= 0.5
+
+    # Run assign in "jpda" mode
+    res = assign([ev], persons, cfg, mode="jpda")
+    assert len(res) == 1
+    assert res[0] == ("p_01", expected_conf)
+    assert res[0][1] >= 0.5
+
+
+def test_acceptance_b_fragmented_person_hungarian():
+    """Acceptance (b): Hungarian picks best hypothesis person_id, but confidence is group marginal."""
+    cfg = DummyConfig()
+    item_conf = 0.95
+    ev = (1000, {"event_id": "i1", "confidence": item_conf})
+
+    p1 = (1000, {"event_id": "p1", "track_id": 1, "person_id": "p_01", "confidence": 0.60})
+    p2 = (1000, {"event_id": "p2", "track_id": 2, "person_id": "p_01", "confidence": 0.60})
+    p3 = (1000, {"event_id": "p3", "track_id": 3, "person_id": "p_02", "confidence": 0.70})
+    persons = [p1, p2, p3]
+
+    candidates = [get_candidates_for_event(ev[1], ev[0], persons, cfg)]
+    hypotheses = enumerate_hypotheses([ev[0]], candidates, cfg.min_gap_ms)
+    marginals, scores, _ = compute_marginals(candidates, hypotheses)
+
+    # Independent computation of best hypothesis
+    best_h_idx = max(range(len(hypotheses)), key=lambda idx: scores[idx])
+    best_pid = hypotheses[best_h_idx][0].person_id
+    assert best_pid == "p_02"
+
+    group_best = sum(
+        m for opt, m in marginals[0].items() if opt.person_id == best_pid
+    )
+    expected_conf = round(group_best * item_conf, 4)
+
+    res = assign([ev], persons, cfg, mode="hungarian")
+    assert len(res) == 1
+    assert res[0] == (best_pid, expected_conf)
+
+
+def test_acceptance_c_none_group_stranger_and_null():
+    """Acceptance (c): Stranger track (person_id None) groups with null option into key None."""
+    cfg = DummyConfig()
+    item_conf = 0.80
+    ev = (1000, {"event_id": "i1", "confidence": item_conf})
+
+    p_stranger = (1000, {"event_id": "ps", "track_id": 1, "person_id": None, "confidence": 0.70})
+    persons = [p_stranger]
+
+    candidates = [get_candidates_for_event(ev[1], ev[0], persons, cfg)]
+    hypotheses = enumerate_hypotheses([ev[0]], candidates, cfg.min_gap_ms)
+    marginals, _, _ = compute_marginals(candidates, hypotheses)
+
+    opt_null = next(opt for opt in candidates[0] if opt.track_id is None)
+    opt_stranger = next(opt for opt in candidates[0] if opt.track_id == 1)
+
+    null_marginal = marginals[0][opt_null]
+    stranger_marginal = marginals[0][opt_stranger]
+    expected_conf = round((null_marginal + stranger_marginal) * item_conf, 4)
+
+    res = assign([ev], persons, cfg, mode="jpda")
+    assert len(res) == 1
+    assert res[0] == (None, expected_conf)
+
+
+def test_acceptance_d_tie_breaking_group_marginals():
+    """Acceptance (d): Equal group marginals break ties by person_id ascending; None wins against named."""
+    # 1. Symmetric p_01 and p_02 tracks: lower person_id wins ("p_01" < "p_02")
+    cfg = DummyConfig()
+    ev = (1000, {"event_id": "i1", "confidence": 0.90})
+    p1 = (1000, {"event_id": "p1", "track_id": 1, "person_id": "p_01", "confidence": 0.80})
+    p2 = (1000, {"event_id": "p2", "track_id": 2, "person_id": "p_02", "confidence": 0.80})
+
+    res_symmetric = assign([ev], [p1, p2], cfg, mode="jpda")
+    assert res_symmetric[0][0] == "p_01"
+
+    # 2. None wins a tie against a named person
+    cfg_tie_null = DummyConfig(null_prior=0.0)
+    # p1 at c=0.5 -> logit 0.0 -> score 0.0, matching null_prior 0.0
+    p_named = (1000, {"event_id": "pn", "track_id": 1, "person_id": "p_01", "confidence": 0.50})
+    res_none_tie = assign([ev], [p_named], cfg_tie_null, mode="jpda")
+    assert res_none_tie[0][0] is None

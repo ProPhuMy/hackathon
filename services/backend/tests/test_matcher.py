@@ -7,7 +7,7 @@ from pathlib import Path
 from jsonschema import Draft202012Validator
 import pytest
 
-from fridge_backend.matcher import Matcher, MatcherConfig
+from fridge_backend.matcher import Matcher, MatcherConfig, MATCHER_VERSION
 
 SCHEMA = json.loads((Path(__file__).parents[3] / "contracts" / "fridge.event.schema.json").read_text())
 VALIDATOR = Draft202012Validator(SCHEMA)
@@ -556,6 +556,65 @@ def test_determinism_all_modes(mode: str):
         ("person", make_person("p2", "p_02", 2.0, confidence=0.91, track_id=2)),
         ("item", make_item("i2", "TAKE", "item_042", 3.0, confidence=0.87)),
         ("tick", ts(8.0)),
+        ("tick", ts(20.0)),
+    ]
+
+    def run_seq():
+        m = Matcher(MatcherConfig(association=mode))
+        all_outputs = []
+        for kind, arg in seq:
+            if kind == "person":
+                all_outputs.extend(m.on_person(arg))
+            elif kind == "item":
+                all_outputs.extend(m.on_item(arg))
+            elif kind == "tick":
+                all_outputs.extend(m.tick(arg))
+        return all_outputs, m.inventory()
+
+    out1, inv1 = run_seq()
+    out2, inv2 = run_seq()
+
+    assert out1 == out2
+    assert inv1 == inv2
+
+
+def test_matcher_version_person_marginal():
+    """Assert MATCHER_VERSION is 4-person-marginal."""
+    assert MATCHER_VERSION == "4-person-marginal"
+
+
+def test_acceptance_h_fragmented_person_matcher():
+    """Acceptance (h): Fragmented person tracks through Matcher default (jpda) assign actor p_01 and status ok."""
+    m = Matcher()  # Default jpda
+    p1 = make_person("p1", "p_01", 1.0, confidence=0.60, track_id=1)
+    p2 = make_person("p2", "p_01", 1.0, confidence=0.60, track_id=2)
+    p3 = make_person("p3", "p_02", 1.0, confidence=0.70, track_id=3)
+    i1 = make_item("i1", "PUT", "item_frag", 1.0, confidence=0.95)
+
+    m.on_person(p1)
+    m.on_person(p2)
+    m.on_person(p3)
+    m.on_item(i1)
+
+    out = m.tick(ts(10.0))
+    assert len(out) == 1
+    VALIDATOR.validate(out[0])
+    assert out[0]["person_id"] == "p_01"
+    assert out[0]["status"] == "ok"
+    assert out[0]["confidence"] >= 0.5
+
+
+@pytest.mark.parametrize("mode", ["nearest", "hungarian", "jpda"])
+def test_acceptance_i_determinism(mode: str):
+    """Acceptance (i): Call sequence including fragmented tracks twice on fresh Matchers yields identical output."""
+    seq = [
+        ("person", make_person("p1", "p_01", 1.0, confidence=0.60, track_id=1)),
+        ("person", make_person("p2", "p_01", 1.0, confidence=0.60, track_id=2)),
+        ("person", make_person("p3", "p_02", 1.0, confidence=0.70, track_id=3)),
+        ("item", make_item("i1", "PUT", "item_frag", 1.0, confidence=0.95)),
+        ("tick", ts(9.0)),
+        ("person", make_person("p4", "p_02", 10.0, confidence=0.90, track_id=4)),
+        ("item", make_item("i2", "TAKE", "item_frag", 12.0, confidence=0.90)),
         ("tick", ts(20.0)),
     ]
 

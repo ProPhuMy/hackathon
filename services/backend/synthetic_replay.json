@@ -166,7 +166,7 @@
           "person_id": null,
           "owner_id": "p_01",
           "ts": "2026-11-08T09:15:11.000Z",
-          "confidence": 0.8294,
+          "confidence": 0.85,
           "status": "uncertain"
         }
       ],
