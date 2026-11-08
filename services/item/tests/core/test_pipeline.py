@@ -235,3 +235,17 @@ def test_close_with_no_open_session(tmp_path: Path, cfg):
     pipeline = ItemPipeline(cfg=cfg, detect=ScriptedDetector([]), gallery=gallery)
 
     assert pipeline.close() == []
+
+
+def test_edge_mode_ignores_door_brightness_and_tracks_items_at_the_line(tmp_path: Path, cfg):
+    from dataclasses import replace
+    from src.core.edge import LOST_UPDATES
+    script = [[hand(1, 100.0, y), item(10, 100.0, y)] for y in (20.0, 60.0, 110.0)]
+    pipeline = ItemPipeline(cfg=replace(cfg, mode="edge"), detect=ScriptedDetector(script),
+                            gallery=ItemGallery(tmp_path / "gallery.json"))
+    dark = np.full((300, 300, 3), 10, dtype=np.uint8)  # "door closed" by brightness: edge mode must not care
+    events = []
+    for k in range(len(script) + LOST_UPDATES + 1):
+        events += pipeline.process(dark, ts=f"2026-11-08T09:00:{k:02d}.000Z")
+    assert [(e["type"], e["item_label"], e["ts"]) for e in events] == [("PUT", "bottle", "2026-11-08T09:00:02.000Z")]
+    Draft202012Validator(SCHEMA).validate(events[0])

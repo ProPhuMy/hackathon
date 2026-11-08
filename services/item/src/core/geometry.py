@@ -59,22 +59,22 @@ class DoorLine:
     inside: Point
     margin: float = 15.0
 
-    def side(self, pt: Point) -> int:
+    def depth(self, pt: Point) -> float:
+        """Signed distance from the line: positive on the inside, negative outside, 0 if undefined."""
         dx = self.p2[0] - self.p1[0]
         dy = self.p2[1] - self.p1[1]
         line_len = math.hypot(dx, dy)
-        if line_len == 0.0:
-            return 0
-        cross_pt = dx * (pt[1] - self.p1[1]) - dy * (pt[0] - self.p1[0])
-        dist = abs(cross_pt) / line_len
-        if dist < self.margin:
-            return 0
         cross_inside = dx * (self.inside[1] - self.p1[1]) - dy * (self.inside[0] - self.p1[0])
-        if cross_inside == 0.0:
+        if line_len == 0.0 or cross_inside == 0.0:
+            return 0.0
+        cross_pt = dx * (pt[1] - self.p1[1]) - dy * (pt[0] - self.p1[0])
+        return cross_pt / line_len if cross_inside > 0 else -cross_pt / line_len
+
+    def side(self, pt: Point) -> int:
+        d = self.depth(pt)
+        if abs(d) < self.margin:
             return 0
-        if (cross_pt > 0 and cross_inside > 0) or (cross_pt < 0 and cross_inside < 0):
-            return 1
-        return -1
+        return 1 if d > 0 else -1
 
 
 def held_item(

@@ -108,7 +108,10 @@ class DoorSession:
                         self.hand_crops[hand.id] = (held.id, area, crop)
 
         for hand in hands:
-            side = self.line.side(hand.box.center())
+            # The point reaching furthest inside, not the centre: seen from above, the arm box spans the
+            # frame edge to the door and the hand vanishes past the front edge, so only its tip crosses.
+            b = hand.box
+            side = max(self.line.side(p) for p in ((b.x1, b.y1), (b.x2, b.y1), (b.x1, b.y2), (b.x2, b.y2)))
             if side == 0:
                 continue
 

@@ -65,5 +65,13 @@ clip_02.mp4,PUT,milk
 - **Step 3:** On the GPU: `uv run python -m src run --source http://localhost:8080/video --broker localhost:19092 --debug-video debug/live.mp4`. On the Mac: `docker compose -f infra/docker-compose.yml exec redpanda rpk topic consume item.event` shows a live PUT and TAKE.
 - **Step 4:** Record the printed p50/p95 in `RESULTS.md`. Optional speed-up if detector p95 > 30 ms: export YOLOE to TensorRT FP16 (`model.export(format="engine", half=True)` after `set_classes`, built on the GPU server) and load the `.engine`; record the new numbers.
 
+## 6b. Camera on top of the fridge (`"mode": "edge"`)
+If the phone can only sit on top of the fridge looking down its front, the hand vanishes behind the door edge
+just as it crosses, so hand crossings are unreliable. Set `"mode": "edge"` in `config.json`: a held item that
+vanishes just past the door line is a PUT, and one that first appears there and is carried away is a TAKE. There
+is no door-brightness gate in this mode, because from on top opening the door can darken the view (shelves swing
+over the floor) or brighten it. The door line is the fridge's front edge, slightly toward where hands reach.
+Hold items so they are visible on the way in. See RESULTS.md.
+
 ## 7. Known Limitation
 Crossings are paired in order, so the logic assumes one person at the fridge at a time.
