@@ -1,4 +1,4 @@
-"""Sự kiện service này publish phải khớp schema trong contracts/. Đỏ ở đây = sẽ vỡ khi ghép."""
+"""Events this service publishes must match the schema in contracts/. Red here = breaks at integration."""
 import json
 from pathlib import Path
 

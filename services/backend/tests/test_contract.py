@@ -1,4 +1,4 @@
-"""Sự kiện service này publish phải khớp schema trong contracts/. Đỏ ở đây = sẽ vỡ khi ghép."""
+"""Events this service publishes must match the schema in contracts/. Red here = breaks at integration."""
 import json
 from pathlib import Path
 
@@ -6,7 +6,7 @@ import pytest
 from jsonschema import Draft202012Validator, ValidationError
 
 from fridge_backend.events import fridge_event
-ITEM = {"event_id": "e1", "topic": "item.event", "type": "TAKE", "item_id": "item_042", "item_label": "hộp sữa", "ts": "2026-11-08T09:15:03.480Z", "confidence": 0.88}
+ITEM = {"event_id": "e1", "topic": "item.event", "type": "TAKE", "item_id": "item_042", "item_label": "milk carton", "ts": "2026-11-08T09:15:03.480Z", "confidence": 0.88}
 
 SCHEMA = json.loads((Path(__file__).parents[3] / "contracts" / "fridge.event.schema.json").read_text())
 

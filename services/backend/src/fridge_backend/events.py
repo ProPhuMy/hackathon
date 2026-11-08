@@ -1,8 +1,8 @@
-"""Dựng sự kiện fridge.event đúng contracts/fridge.event.schema.json. Mọi chỗ publish phải đi qua đây."""
+"""Builds fridge.event events matching contracts/fridge.event.schema.json. Every publish must go through here."""
 
 
 def fridge_event(item: dict, person_id: str | None, owner_id: str | None, confidence: float, status: str) -> dict:
-    """item là một item.event đã nhận; giữ event_id của nó làm idempotency key."""
+    """item is a received item.event; its event_id is kept as the idempotency key."""
     return {
         "event_id": item["event_id"],
         "topic": "fridge.event",

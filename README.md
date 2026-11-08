@@ -1,39 +1,39 @@
 # Fridge Tracker
 
-Biết ai đặt gì vào tủ lạnh chung, ai lấy gì ra, và ai lấy nhầm đồ của người khác.
-Tổng quan dự án: [docs/Fridge Tracker – Project Overview.md](docs/Fridge%20Tracker%20–%20Project%20Overview.md)
+Know who put what into a shared fridge, who took what out, and who took someone else's food.
+Project overview: [docs/Fridge Tracker – Project Overview.md](docs/Fridge%20Tracker%20–%20Project%20Overview.md)
 
-## Ai sở hữu thư mục nào
+## Who owns which folder
 
-Mỗi người **chỉ sửa trong thư mục của mình**. Nhờ vậy merge không bao giờ conflict.
+Each person **only edits their own folder**. That way merges never conflict.
 
-| Thư mục | Chủ | Branch |
+| Folder | Owner | Branch |
 | --- | --- | --- |
-| `services/person/` | Vai 1 – Nhận diện người | `person` |
-| `services/item/` | Vai 2 – Nhận diện món đồ | `item` |
-| `services/backend/` | Vai 3 – Backend, matching, MCP (Dang) | `backend` |
-| `dashboard/`, `eval/`, `infra/k8s/` | Vai 4 – Dashboard, hạ tầng, video | `dashboard` |
-| `contracts/`, `tools/`, `infra/docker-compose.yml`, `README.md`, `.gitignore`, `docs/` | **Chung – chỉ Dang sửa** | `main` |
+| `services/person/` | Role 1 – Person recognition | `person` |
+| `services/item/` | Role 2 – Item recognition | `item` |
+| `services/backend/` | Role 3 – Backend, matching, MCP (Dang) | `backend` |
+| `dashboard/`, `eval/`, `infra/k8s/` | Role 4 – Dashboard, infra, video | `dashboard` |
+| `contracts/`, `tools/`, `infra/docker-compose.yml`, `README.md`, `.gitignore`, `docs/` | **Shared – only Dang edits** | `main` |
 
-Muốn đổi file chung (thêm field vào sự kiện, thêm container vào compose…): nhắn Dang, Dang sửa trên `main`, mọi người `git merge main` vào branch mình.
+Need to change a shared file (add a field to an event, add a container to compose, …)? Ask Dang. Dang changes it on `main`, then everyone runs `git merge main` into their branch.
 
-## Bắt đầu (mỗi người)
+## Getting started (everyone)
 
 ```bash
 git clone https://github.com/ProPhuMy/hackathon.git && cd hackathon
-git switch -c <branch-của-bạn>          # person | item | backend | dashboard
+git switch -c <your-branch>          # person | item | backend | dashboard
 
 docker compose -f infra/docker-compose.yml up -d   # Redpanda (localhost:19092) + Postgres (localhost:5432)
-uv run tools/fake_events.py --loop                 # bắn sự kiện giả liên tục
+uv run tools/fake_events.py --loop                 # publish fake events continuously
 ```
 
-Python service (person / item / backend):
+Python services (person / item / backend):
 
 ```bash
-cd services/<tên>
-uv sync                 # tạo .venv riêng cho service này
-uv add <thư-viện>       # chỉ sửa pyproject.toml + uv.lock của service này
-uv run pytest           # PHẢI xanh trước khi mở PR
+cd services/<name>
+uv sync                 # creates this service's own .venv
+uv add <package>        # only touches this service's pyproject.toml + uv.lock
+uv run pytest           # MUST pass before opening a PR
 ```
 
 Dashboard:
@@ -42,34 +42,34 @@ Dashboard:
 cd dashboard && npm install && npm run dev
 ```
 
-Xem sự kiện đang chạy trên bus:
+Watch events on the bus:
 
 ```bash
 docker compose -f infra/docker-compose.yml exec redpanda rpk topic consume person.seen
 ```
 
-## Hợp đồng sự kiện
+## Event contracts
 
-`contracts/*.schema.json` là nguồn sự thật duy nhất. Ba topic:
+`contracts/*.schema.json` is the single source of truth. Three topics:
 
-| Topic | Ai publish | Ai đọc |
+| Topic | Published by | Consumed by |
 | --- | --- | --- |
-| `person.seen` | Vai 1 | Vai 3 |
-| `item.event` | Vai 2 | Vai 3 |
-| `fridge.event` | Vai 3 | Dashboard (qua API), MCP |
+| `person.seen` | Role 1 | Role 3 |
+| `item.event` | Role 2 | Role 3 |
+| `fridge.event` | Role 3 | Dashboard (via API), MCP |
 
-Quy tắc:
-- Dựng sự kiện **chỉ** bằng hàm trong `src/<package>/events.py` của service mình, không tự viết dict ở chỗ khác.
-- `tests/test_contract.py` kiểm tra hàm đó khớp schema. Test đỏ = sẽ vỡ khi ghép.
-- `ts` luôn là UTC, dạng `2026-11-08T09:15:02.120Z`. `event_id` là uuid, dùng làm idempotency key.
+Rules:
+- Build events **only** with the function in your service's `src/<package>/events.py`; never hand-write the dict elsewhere.
+- `tests/test_contract.py` checks that function against the schema. A red test means it will break at integration.
+- `ts` is always UTC, formatted like `2026-11-08T09:15:02.120Z`. `event_id` is a uuid used as the idempotency key.
 
-## Quy trình Git
+## Git workflow
 
-1. Làm trên branch của mình, commit thoải mái.
-2. Mỗi khi phần của mình chạy được một bước: `uv run pytest` xanh → push → mở PR vào `main`.
-3. Merge vào `main` vài lần trong đêm, đừng dồn đến cuối. Vì thư mục không chồng nhau nên PR không conflict, và `main` luôn có một bản chạy được để quay video dự phòng.
-4. Kéo `main` mới về branch mình định kỳ: `git merge main`.
+1. Work on your own branch, commit as often as you like.
+2. Whenever your part works one step further: `uv run pytest` passes → push → open a PR into `main`.
+3. Merge into `main` several times during the night; don't save it all for the end. Folders don't overlap, so PRs don't conflict, and `main` always has a working build for a backup video.
+4. Pull the latest `main` into your branch regularly: `git merge main`.
 
-## Không đưa lên Git
+## Never commit
 
-Model weights (`*.pt`, `*.onnx`, …), video (`*.mp4`, …), `eval/clips/`, `models/`: đã chặn trong `.gitignore`. Chia sẻ qua Google Drive.
+Model weights (`*.pt`, `*.onnx`, …), videos (`*.mp4`, …), `eval/clips/`, `models/`: already blocked in `.gitignore`. Share them via Google Drive.

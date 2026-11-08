@@ -1,4 +1,4 @@
-"""Sự kiện service này publish phải khớp schema trong contracts/. Đỏ ở đây = sẽ vỡ khi ghép."""
+"""Events this service publishes must match the schema in contracts/. Red here = breaks at integration."""
 import json
 from pathlib import Path
 
@@ -11,11 +11,11 @@ SCHEMA = json.loads((Path(__file__).parents[3] / "contracts" / "item.event.schem
 
 
 def test_event_matches_contract():
-    Draft202012Validator(SCHEMA).validate(item_event("TAKE", "item_042", "hộp sữa", 0.88))
+    Draft202012Validator(SCHEMA).validate(item_event("TAKE", "item_042", "milk carton", 0.88))
 
 
 def test_contract_rejects_broken_event():
-    bad = item_event("TAKE", "item_042", "hộp sữa", 0.88)
+    bad = item_event("TAKE", "item_042", "milk carton", 0.88)
     del bad["type"]
     with pytest.raises(ValidationError):
         Draft202012Validator(SCHEMA).validate(bad)

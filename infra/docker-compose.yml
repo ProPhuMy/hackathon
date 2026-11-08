@@ -1,15 +1,15 @@
-# Chạy từ thư mục gốc: docker compose -f infra/docker-compose.yml up -d
+# Run from the repo root: docker compose -f infra/docker-compose.yml up -d
 services:
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:v24.2.7
     command:
       - redpanda start
-      - --mode dev-container   # 1 node, tự tạo topic khi có người publish
+      - --mode dev-container   # single node, auto-creates topics on first publish
       - --smp 1
       - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
       - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
     ports:
-      - "19092:19092"   # service chạy trên máy (vision) dùng localhost:19092
+      - "19092:19092"   # services running on the host (vision) use localhost:19092
     healthcheck:
       test: ["CMD", "rpk", "cluster", "health", "--exit-when-healthy"]
       interval: 5s
@@ -19,7 +19,7 @@ services:
     image: postgres:16
     environment:
       POSTGRES_USER: fridge
-      POSTGRES_PASSWORD: fridge   # chỉ dùng local khi demo
+      POSTGRES_PASSWORD: fridge   # local demo only
       POSTGRES_DB: fridge
     ports:
       - "5432:5432"

@@ -1,277 +1,278 @@
 # **Fridge Tracker – Project Overview**
 
-Cập nhật 07/11/2026 · Dang  
-**Một câu:** hệ thống quản lý tủ lạnh chung, biết ai đặt gì, ai lấy gì, và ai lấy nhầm đồ của người khác. Mọi kỹ thuật thêm vào phải làm câu này chính xác hơn, hoặc giúp truy cập dữ liệu của câu này.
+Updated 11/07/2026 · Dang  
+**One sentence:** a shared-fridge management system that knows who put what in, who took what out, and who took someone else's food. Every technique we add must make this sentence more accurate, or help access the data behind it.
 
-## **Bài toán và mục tiêu**
+## **Problem and goals**
 
-Hệ thống theo dõi tủ lạnh chung: biết ai đặt món nào vào, ai lấy món nào ra, và báo khi người lấy không phải chủ món đồ. Mọi thứ được quản trị qua một web dashboard.  
-Dự thi track **Most Over-Engineered**. Nguyên tắc: thuật toán được phép phức tạp, nhưng mỗi lớp phải phục vụ một mục tiêu cụ thể, chủ yếu là tăng độ chính xác của nhận diện người.  
-Bối cảnh dùng để pitch (đề xuất, team chưa chốt): tủ lạnh chung ở ký túc xá, nhà share hoặc pantry văn phòng.
+A shared-fridge tracker: know who put each item in, who took each item out, and raise an alert when the taker is not the item's owner. Everything is managed through a web dashboard.  
+Entering the **Most Over-Engineered** track. Principle: algorithms may be complex, but every layer must serve a concrete goal, mainly improving person-recognition accuracy.  
+Pitch setting (proposed, team has not decided): a shared fridge in a dorm, shared house or office pantry.
 
-## **Phạm vi đã chốt**
+## **Locked scope**
 
-Dự án có đúng 6 chức năng dưới đây. Chức năng nào không nằm trong bảng thì không làm, trừ khi cả team đồng ý thay một dòng cũ.
+The project has exactly the 6 features below. Anything not in this table is not built, unless the whole team agrees to replace an existing row.
 
-| \# | Chức năng | Làm được gì | Xong khi (đề xuất) |
+| \# | Feature | What it does | Done when (proposed) |
 | :---- | :---- | :---- | :---- |
-| 1 | Ghi nhận người đặt đồ | Biết ai vừa đặt món nào vào tủ | Mỗi lần đặt sinh ra một sự kiện PUT có người, món, thời gian |
-| 2 | Ghi nhận người lấy đồ | Biết ai vừa lấy món nào ra khỏi tủ | Mỗi lần lấy sinh ra một sự kiện TAKE tương tự |
-| 3 | Tồn kho hiện tại | Danh sách món đang có trong tủ và chủ của từng món | Danh sách khớp với thực tế sau mỗi lần đóng cửa |
-| 4 | Matching và cảnh báo | So người lấy với chủ món đồ, báo khi khác nhau | Lấy nhầm đồ thì dashboard hiện cảnh báo; điểm tin cậy thấp thì đánh dấu "không chắc" |
-| 5 | Web dashboard | Quản trị người dùng, tồn kho, lịch sử sự kiện, cảnh báo | Xem được cả 4 thứ đó và đăng ký được người mới |
-| 6 | Nhận diện và tracking khuôn mặt độ chính xác cao | Xác định đúng người cho chức năng 1 và 2 | Có số đo accuracy trên bộ test của team |
+| 1 | Record who puts items in | Know who just put which item into the fridge | Every put produces a PUT event with person, item, time |
+| 2 | Record who takes items out | Know who just took which item out | Every take produces a similar TAKE event |
+| 3 | Current inventory | List of items currently in the fridge and the owner of each | The list matches reality after every door close |
+| 4 | Matching and alerts | Compare the taker with the item's owner, alert when they differ | Taking someone else's item shows an alert on the dashboard; low confidence is flagged "uncertain" |
+| 5 | Web dashboard | Manage users, inventory, event history, alerts | All 4 are viewable and new people can be registered |
+| 6 | High-accuracy face recognition and tracking | Identify the right person for features 1 and 2 | Has an accuracy number on the team's test set |
 
-Các lớp thuật toán ở phần Kiến trúc (tracking, gộp embedding, open-set, liveness) là **cách làm chức năng 6**, không phải chức năng mới. Độ phức tạp cho track over-engineered nằm bên trong chức năng 6, không nằm ở việc thêm tính năng.  
-**MCP server** là một lớp truy cập, không phải chức năng mới: nó cho các Claude khác đọc tồn kho, lịch sử, cảnh báo và xu hướng từ cùng dữ liệu với dashboard. Chỉ đọc, không trả về ảnh mặt hay embedding. Tool dự kiến: get\_inventory, get\_history, get\_alerts, get\_trends.
+The algorithm layers in the Architecture section (tracking, embedding fusion, open-set, liveness) are **how feature 6 is built**, not new features. The complexity for the over-engineered track lives inside feature 6, not in adding features.  
+The **MCP server** is an access layer, not a new feature: it lets other Claude instances read inventory, history, alerts and trends from the same data as the dashboard. Read-only; never returns face images or embeddings. Planned tools: get\_inventory, get\_history, get\_alerts, get\_trends.
 
-## **Kiến trúc kỹ thuật**
+## **Technical architecture**
 
-Người và món đồ được nhận diện song song, rồi gộp lại để matching. Chỉ khi cả hai luồng có kết quả thì mới sinh sự kiện và đưa vào matching.  
-**Luồng nhận diện người (chức năng 6\)**
+People and items are recognized in parallel, then combined for matching. An event is created and sent to matching only when both pipelines have a result.  
+**Person recognition pipeline (feature 6\)**
 
-> 1. Camera Galaxy Z Flip: stream video về Mac  
-> 2. Phát hiện và căn mặt: ensemble SCRFD \+ YOLO-face (WBF)  
-> 3. Embedding khuôn mặt: ensemble ArcFace \+ AdaFace, có calibration  
-> 4. Tracking và gộp theo thời gian: BoT-SORT; gộp theo điểm chất lượng MagFace  
-> 5. Liveness (chưa chốt): chống giơ ảnh; chỉ làm nếu còn giờ  
-> 6. Ai đây? Conformal prediction: người quen hay người lạ
+> 1. Galaxy Z Flip camera: streams video to the Mac  
+> 2. Face detection and alignment: SCRFD \+ YOLO-face ensemble (WBF)  
+> 3. Face embedding: ArcFace \+ AdaFace ensemble, with calibration  
+> 4. Tracking and temporal fusion: BoT-SORT; fusion weighted by MagFace quality score  
+> 5. Liveness (not decided): anti photo-spoofing; only if time allows  
+> 6. Who is this? Conformal prediction: known person or stranger
 
-**Luồng nhận diện món đồ**
+**Item recognition pipeline**
 
-> 1. Cửa mở (chưa chốt): camera món đồ phát hiện đèn tủ bật  
-> 2. Tay \+ vật: Grounding DINO \+ SAM 2; tay 3D bằng HaMeR  
-> 3. Vào hay ra, cầm hay chạm: mặt phẳng 3D ở cửa \+ Transformer phân loại hành động  
-> 4. Món nào, của ai: DINOv2 \+ màu \+ vị trí, ghép bằng Hungarian algorithm
+> 1. Door open (not decided): the item camera detects the fridge light turning on  
+> 2. Hand \+ object: Grounding DINO \+ SAM 2; 3D hand via HaMeR  
+> 3. In or out, grab or touch: 3D plane at the door \+ Transformer action classifier  
+> 4. Which item, whose: DINOv2 \+ color \+ position, matched with the Hungarian algorithm
 
-**Hai luồng gộp lại**
+**Combining the two pipelines**
 
-> 1. Sự kiện PUT / TAKE: người \+ món \+ thời gian \+ điểm tin cậy (chức năng 1, 2\)  
-> 2. Matching \+ cảnh báo (chức năng 4): lấy nhầm thì cảnh báo; điểm thấp thì đánh dấu "không chắc"  
-> 3. Web dashboard (chức năng 3, 5): tồn kho, lịch sử sự kiện, cảnh báo, đăng ký người
+> 1. PUT / TAKE event: person \+ item \+ time \+ confidence (features 1, 2\)  
+> 2. Matching \+ alerts (feature 4): alert on wrong taker; flag "uncertain" on low confidence  
+> 3. Web dashboard (features 3, 5): inventory, event history, alerts, person registration
 
-## **Kỹ thuật over-engineer theo từng vấn đề**
+## **Over-engineered techniques per problem**
 
-Mỗi kỹ thuật thay một cách làm đơn giản và sửa đúng một lỗi của cách đó. Cột "Sửa lỗi gì" chính là lý do để nói với giám khảo, và mỗi lớp nên có số đo accuracy khi bật và tắt.  
-**Lưu ý:** các kỹ thuật dưới đây chỉ là gợi ý, chưa phải lựa chọn cuối cùng. Mỗi thành viên research phần mình phụ trách, có thể thay bằng kỹ thuật khác nếu tốt hơn, miễn vẫn sửa đúng lỗi ghi ở cột cuối. Khi research, kiểm tra 4 điểm:
+Each technique replaces a simple approach and fixes exactly one flaw of that approach. The "What it fixes" column is the justification for the judges, and each layer should have an accuracy number with it on and off.  
+**Note:** these techniques are suggestions, not final choices. Each member researches their own area and may swap in a better technique, as long as it still fixes the flaw in the last column. When researching, check 4 things:
 
-> * Có code và model pretrained sẵn không  
-> * Chạy được trên Mac (Apple Silicon) không, tốn bao nhiêu RAM  
-> * Tốc độ xử lý mỗi frame  
-> * Độ khó tích hợp trong thời gian hackathon
+> * Is there code and a pretrained model available  
+> * Does it run on a Mac (Apple Silicon), and how much RAM does it use  
+> * Per-frame processing speed  
+> * Integration difficulty within hackathon time
 
-### **Nhận diện người**
+### **Person recognition**
 
-| Vấn đề | Thay vì | Dùng | Sửa lỗi gì |
+| Problem | Instead of | Use | What it fixes |
 | :---- | :---- | :---- | :---- |
-| Phát hiện mặt | SCRFD | Ensemble SCRFD \+ YOLO-face, gộp bằng Weighted Boxes Fusion | Sót mặt nghiêng, mặt nhỏ ở xa |
-| Nhận diện mặt | ArcFace | Ensemble ArcFace \+ AdaFace, gộp điểm qua calibration; norm của MagFace làm điểm chất lượng frame | Frame mờ, thiếu sáng làm sai danh tính |
-| Người lạ | Một ngưỡng cố định | Conformal prediction: ngưỡng có đảm bảo tỷ lệ lỗi | Gán bừa người lạ thành người quen |
-| Tracking | ByteTrack | BoT-SORT có bù chuyển động camera | Mất ID khi bị che hoặc điện thoại rung |
-| Quay lưng vào tủ | Không xử lý | Không làm: team đã bỏ body re-ID | Mất danh tính đúng lúc thao tác với tủ |
-| Giơ ảnh giả | Không xử lý | Depth Anything V2 (ảnh phẳng không có chiều sâu) \+ rPPG đo nhịp tim qua màu da | Giả mạo bằng ảnh hoặc video trên điện thoại |
+| Face detection | SCRFD | SCRFD \+ YOLO-face ensemble, merged with Weighted Boxes Fusion | Missed profile faces and small distant faces |
+| Face recognition | ArcFace | ArcFace \+ AdaFace ensemble, scores merged via calibration; MagFace norm as frame quality score | Blurry or dark frames giving the wrong identity |
+| Strangers | A fixed threshold | Conformal prediction: a threshold with a guaranteed error rate | Strangers wrongly labeled as known people |
+| Tracking | ByteTrack | BoT-SORT with camera motion compensation | Lost IDs under occlusion or phone shake |
+| Back turned to the fridge | Not handled | Not doing it: team dropped body re-ID | Identity lost right when interacting with the fridge |
+| Photo spoofing | Not handled | Depth Anything V2 (flat photos have no depth) \+ rPPG heart rate from skin color | Spoofing with a photo or video on a phone |
 
-### **Tay \+ vật**
+### **Hand \+ object**
 
-| Vấn đề | Thay vì | Dùng | Sửa lỗi gì |
+| Problem | Instead of | Use | What it fixes |
 | :---- | :---- | :---- | :---- |
-| Cửa mở | Công tắc bật/tắt | Camera món đồ phát hiện đèn trong tủ bật \+ optical flow trên cánh cửa (đề xuất) | Xử lý thừa khi không ai mở tủ |
-| Phát hiện vật | YOLO với lớp cố định | Grounding DINO (open-vocabulary) \+ SAM 2 theo dõi mask qua video | Món lạ không có trong lớp; vật bị tay che |
-| Bàn tay | MediaPipe Hands 2D | HaMeR dựng mesh tay 3D | Không biết tay có thật sự nắm vật không |
-| Tay của ai | Không xử lý | Pose toàn thân (ViTPose), nối cổ tay của skeleton với bàn tay | Hai người đứng gần tủ cùng lúc |
-| Vào hay ra | So ảnh trước/sau | Depth Anything V2 dựng mặt phẳng 3D ở cửa tủ; quỹ đạo vật qua Kalman filter | Không biết hướng PUT hay TAKE |
-| Loại hành động | Luật if/else | Transformer trên chuỗi keypoint tay \+ mask vật, phân loại PUT / TAKE / chỉ chạm | Chạm rồi để lại bị tính là lấy |
-| Món nào, của ai | Sticker QR | DINOv2 \+ histogram màu \+ vị trí kệ, ghép bằng Hungarian algorithm | Hai món giống hệt nhau |
-| Nhất quán | Tin từng sự kiện riêng lẻ | Factor graph trên chuỗi sự kiện, ví dụ không thể lấy món không có trong tủ | Sự kiện mâu thuẫn nhau |
+| Door open | On/off switch | Item camera detects the fridge light \+ optical flow on the door (proposed) | Wasted processing when nobody opens the fridge |
+| Object detection | YOLO with fixed classes | Grounding DINO (open-vocabulary) \+ SAM 2 tracking masks across video | Unknown items not in the class list; items occluded by the hand |
+| Hand | MediaPipe Hands 2D | HaMeR 3D hand mesh | Can't tell whether the hand actually grips the item |
+| Whose hand | Not handled | Full-body pose (ViTPose), linking skeleton wrists to hands | Two people near the fridge at once |
+| In or out | Before/after image diff | Depth Anything V2 builds a 3D plane at the fridge door; object trajectory via Kalman filter | Can't tell PUT from TAKE |
+| Action type | if/else rules | Transformer over hand keypoint sequences \+ object mask, classifying PUT / TAKE / touch only | Touching and leaving an item counted as taking |
+| Which item, whose | QR sticker | DINOv2 \+ color histogram \+ shelf position, matched with the Hungarian algorithm | Two identical items |
+| Consistency | Trusting each event alone | Factor graph over the event sequence, e.g. you can't take an item that isn't in the fridge | Contradictory events |
 
-### **Hạ tầng**
+### **Infrastructure**
 
-| Vấn đề | Thay vì | Dùng | Sửa lỗi gì |
+| Problem | Instead of | Use | What it fixes |
 | :---- | :---- | :---- | :---- |
-| Điều phối | Một script Python | Kubernetes (k3d trên Mac), mỗi model một microservice | Một model chậm kéo cả hệ thống |
-| Truyền dữ liệu | Gọi hàm trực tiếp | Redpanda (tương thích Kafka) làm event bus | Rớt frame khi model xử lý không kịp |
-| Lưu trạng thái | Một bảng tồn kho | Event sourcing \+ CQRS: tồn kho là phép chiếu từ log sự kiện | Mất lịch sử mà trends và MCP cần |
-| Serving model | Load model trong từng service | Ray Serve có dynamic batching | Xử lý từng frame lẻ, phí phần cứng |
-| Autoscale | Số worker cố định | KEDA scale worker theo consumer lag | Nhiều tủ, nhiều người cùng lúc |
-| Gallery khuôn mặt | List trong RAM | Qdrant (vector DB) | Tìm kiếm chậm khi nhiều người |
-| Trends | Query thẳng log | TimescaleDB | Truy vấn xu hướng theo thời gian |
-| Bảo mật | Không mã hóa nội bộ | Linkerd service mesh, mTLS giữa các service | Dữ liệu khuôn mặt đi qua mạng nội bộ không mã hóa |
-| Quan sát | print log | OpenTelemetry tracing \+ Prometheus/Grafana | Không biết sự kiện bị chậm ở bước nào |
-| Triển khai | kubectl apply bằng tay | GitOps với Argo CD | Thuần over-engineer, nói thẳng điều đó khi pitch |
+| Orchestration | One Python script | Kubernetes (k3d on Mac), one microservice per model | One slow model drags down the whole system |
+| Data transport | Direct function calls | Redpanda (Kafka-compatible) as the event bus | Dropped frames when a model can't keep up |
+| State storage | One inventory table | Event sourcing \+ CQRS: inventory is a projection of the event log | Losing the history that trends and MCP need |
+| Model serving | Loading the model in every service | Ray Serve with dynamic batching | Processing single frames, wasting hardware |
+| Autoscaling | Fixed number of workers | KEDA scaling workers on consumer lag | Many fridges, many people at once |
+| Face gallery | In-memory list | Qdrant (vector DB) | Slow search with many people |
+| Trends | Querying the log directly | TimescaleDB | Time-series trend queries |
+| Security | No internal encryption | Linkerd service mesh, mTLS between services | Face data crossing the internal network unencrypted |
+| Observability | print logging | OpenTelemetry tracing \+ Prometheus/Grafana | Not knowing which step slows an event down |
+| Deployment | kubectl apply by hand | GitOps with Argo CD | Pure over-engineering; say so plainly in the pitch |
 
-### **Thiết kế hệ thống phân tán**
+### **Distributed system design**
 
-Bảng Hạ tầng ở trên là công cụ; bảng này là thuật toán của hệ thống phân tán chạy trên các công cụ đó. Mỗi dòng vẫn sửa một lỗi thật của một hệ thống có hai camera và nhiều service.
+The Infrastructure table above is the tooling; this table is the distributed-systems algorithms running on that tooling. Each row still fixes a real flaw of a system with two cameras and many services.
 
-| Vấn đề | Thay vì | Dùng | Sửa lỗi gì |
+| Problem | Instead of | Use | What it fixes |
 | :---- | :---- | :---- | :---- |
-| Ghép người với món | So timestamp trực tiếp | Event-time window join có watermark (Quix Streams hoặc Bytewax), xử lý sự kiện đến trễ | Mạng trễ làm sự kiện đến sai thứ tự, ghép nhầm người |
-| Đồng hồ hai camera | Tin giờ của điện thoại | Hybrid logical clock gắn vào mỗi frame, ước lượng độ lệch đồng hồ lúc khởi động | Hai điện thoại lệch giờ vài trăm mili giây |
-| Xử lý trùng | Ghi thẳng | Idempotency key cho mỗi sự kiện \+ Kafka transactions (exactly-once) | Một lần lấy đồ bị tính hai lần khi service khởi động lại |
-| Ghi DB và publish | Hai lệnh riêng | Transactional outbox | DB và event bus lệch nhau khi crash giữa chừng |
-| Thứ tự theo tủ | Một topic chung | Partition theo fridge\_id, consistent hashing gán tủ cho worker | Sự kiện cùng một tủ bị xử lý lộn thứ tự khi scale |
-| Model xử lý không kịp | Chờ | Back-pressure: hàng đợi ưu tiên theo điểm chất lượng frame, bỏ frame kém trước (load shedding) | Hàng đợi phình ra, độ trễ tăng mãi |
-| Model bị lỗi | Cả luồng đứng | Circuit breaker \+ graceful degradation: SAM 2 lỗi thì tự quay về YOLO | Một model lỗi làm sập cả hệ thống |
-| Nâng cấp model | Thay thẳng | Không làm: dùng script đo accuracy trên bộ clip test | Không biết model mới có tốt hơn không; cũng là nguồn số accuracy bật/tắt |
-| Event bus | Một broker | Cluster Redpanda 3 node, mỗi partition nhân bản bằng Raft | Một broker chết là mất sự kiện |
-| Hợp đồng sự kiện | JSON tự do | Schema registry của Redpanda \+ Protobuf | Một người đổi định dạng làm vỡ service của người khác |
-| Độ bền | Hy vọng nó chạy | Chaos engineering: tự động kill pod hoặc broker ngẫu nhiên khi đang chạy | Chứng minh hệ thống tự hồi phục |
-| MCP server | Gọi không giới hạn | Token bucket rate limiting | AI khác gọi dồn dập làm chậm dashboard |
+| Joining people with items | Comparing timestamps directly | Event-time window join with watermarks (Quix Streams or Bytewax), handling late events | Network delay makes events arrive out of order and join the wrong person |
+| Two camera clocks | Trusting the phone's time | Hybrid logical clock attached to each frame, estimating clock skew at startup | Two phones drifting a few hundred milliseconds apart |
+| Duplicates | Writing directly | Idempotency key per event \+ Kafka transactions (exactly-once) | One take counted twice when a service restarts |
+| DB write and publish | Two separate commands | Transactional outbox | DB and event bus diverge after a mid-way crash |
+| Per-fridge ordering | One shared topic | Partition by fridge\_id, consistent hashing to assign fridges to workers | Events for the same fridge processed out of order when scaling |
+| Model can't keep up | Waiting | Back-pressure: priority queue by frame quality score, dropping poor frames first (load shedding) | Queue grows and latency increases forever |
+| Model failure | Whole pipeline stalls | Circuit breaker \+ graceful degradation: if SAM 2 fails, fall back to YOLO | One failing model takes down the whole system |
+| Model upgrades | Swapping directly | Not doing it: use a script that measures accuracy on the test clip set | Not knowing if the new model is better; also the source of on/off accuracy numbers |
+| Event bus | One broker | 3-node Redpanda cluster, each partition replicated with Raft | One dead broker loses events |
+| Event contracts | Free-form JSON | Redpanda schema registry \+ Protobuf | One person changing the format breaks someone else's service |
+| Resilience | Hoping it runs | Chaos engineering: randomly kill a pod or broker while running | Proves the system self-heals |
+| MCP server | Unlimited calls | Token bucket rate limiting | Another AI hammering it slows the dashboard |
 
-Đã chốt: làm watermark join, không làm shadow deployment. Cluster Redpanda 3 node kèm chaos test cũng làm, sau khi luồng chính đã chạy với 1 node; cả 3 node chạy trên cùng một Mac nên đây là mô phỏng phân tán, nói rõ điều này trong video.  
-Câu chuyện để pitch: các model nặng (SAM 2, HaMeR, ensemble) làm hệ thống chậm, nên cần event bus, Kubernetes và autoscale. Độ phức tạp của hạ tầng được chính độ phức tạp của thuật toán biện minh.  
-Rủi ro thật: nhiều model trong bảng vốn viết cho GPU NVIDIA, nên cần thử từng cái trên Apple Silicon (MPS) trước khi chốt. RAM của Mac là giới hạn khi chạy cùng lúc k3d, Redpanda và vài model.
+Decided: do the watermark join, skip shadow deployment. The 3-node Redpanda cluster with chaos testing is also in, after the main flow runs on 1 node; all 3 nodes run on the same Mac, so it is a simulated distributed system, and the video must say so clearly.  
+Pitch story: the heavy models (SAM 2, HaMeR, ensembles) make the system slow, so it needs an event bus, Kubernetes and autoscaling. The infrastructure complexity is justified by the algorithm complexity itself.  
+Real risk: many models in the tables were written for NVIDIA GPUs, so each must be tried on Apple Silicon (MPS) before committing to it. Mac RAM is the limit when running k3d, Redpanda and several models at once.
 
-## **Thứ tự ưu tiên**
+## **Priority order**
 
-Làm theo thứ tự này; mỗi bước chỉ bắt đầu khi bước trước đã chạy được.
+Work in this order; each step starts only after the previous one runs.
 
-> 1. Luồng chính chạy trọn vẹn: một người, một món, đặt vào rồi lấy ra, hiện lên dashboard.  
-> 2. Các lớp chính xác cho nhận diện người và tay \+ vật (hai bảng đầu ở trên).  
+> 1. Main flow end to end: one person, one item, put in then taken out, shown on the dashboard.  
+> 2. Accuracy layers for person recognition and hand \+ object (the first two tables above).  
 > 3. MCP server.  
-> 4. Hạ tầng cluster (bảng Hạ tầng).
+> 4. Cluster infrastructure (Infrastructure table).
 
-Nếu hết giờ, cắt hạ tầng trước: nó làm hệ thống trông to hơn chứ không làm hệ thống đúng hơn.
+If time runs out, cut infrastructure first: it makes the system look bigger, not more correct.
 
-## **Chia việc**
+## **Work split**
 
-Bốn vai chạy song song, nối với nhau bằng một định dạng sự kiện chung chốt trong 30 phút đầu. Gán người là đề xuất, team có thể đổi.
+Four roles in parallel, connected by a shared event format locked in the first 30 minutes. Assignments are proposals; the team may change them.
 
-| Vai | Người | Phụ trách | Bàn giao |
+| Role | Person | Owns | Hands off |
 | :---- | :---- | :---- | :---- |
-| 1\. Nhận diện người | Thành viên 2 | Camera mặt, ensemble detection, ArcFace \+ AdaFace, BoT-SORT, open-set | Sự kiện person.seen |
-| 2\. Nhận diện món đồ | Thành viên 3 | Camera món, phát hiện cửa mở, Grounding DINO \+ SAM 2, HaMeR, phân loại PUT/TAKE, DINOv2 \+ Hungarian | Sự kiện item.event |
-| 3\. Backend và matching | Dang (đề xuất) | Event bus, event sourcing \+ CQRS, ghép người với sự kiện món đồ theo thời gian, matching \+ cảnh báo, MCP server | API cho dashboard và MCP |
-| 4\. Dashboard, hạ tầng và video | Thành viên 4 | Web dashboard, Kubernetes \+ autoscale, Grafana, quay và dựng video demo | Video nộp lúc 13:00 |
+| 1\. Person recognition | Member 2 | Face camera, detection ensemble, ArcFace \+ AdaFace, BoT-SORT, open-set | person.seen events |
+| 2\. Item recognition | Member 3 | Item camera, door-open detection, Grounding DINO \+ SAM 2, HaMeR, PUT/TAKE classification, DINOv2 \+ Hungarian | item.event events |
+| 3\. Backend and matching | Dang (proposed) | Event bus, event sourcing \+ CQRS, time-based join of people with item events, matching \+ alerts, MCP server | API for the dashboard and MCP |
+| 4\. Dashboard, infra and video | Member 4 | Web dashboard, Kubernetes \+ autoscaling, Grafana, recording and editing the demo video | Video submitted at 13:00 |
 
-Hai luồng nhận diện không biết về nhau; backend ghép chúng theo cửa sổ thời gian thành fridge.event. Định dạng đề xuất:  
-`{ "topic": "person.seen", "track_id": 7, "person_id": "p_02", "ts": "2026-11-08T09:15:02.120Z", "confidence": 0.93 }`  
-`{ "topic": "item.event", "type": "TAKE", "item_id": "item_042", "item_label": "hộp sữa", "ts": "2026-11-08T09:15:03.480Z", "confidence": 0.88 }`  
-Các mốc:
+The two recognition pipelines don't know about each other; the backend joins them by time window into fridge.event. The current format is defined in `contracts/*.schema.json`; examples:  
+`{ "event_id": "…", "topic": "person.seen", "track_id": 7, "person_id": "p_02", "ts": "2026-11-08T09:15:02.120Z", "confidence": 0.93 }`  
+`{ "event_id": "…", "topic": "item.event", "type": "TAKE", "item_id": "item_042", "item_label": "milk carton", "ts": "2026-11-08T09:15:03.480Z", "confidence": 0.88 }`  
+Milestones:
 
-> 1. 30 phút đầu: chốt định dạng sự kiện. Mỗi người dùng dữ liệu giả theo định dạng đó để không phải chờ nhau.  
-> 2. Luồng chính chạy trọn vẹn với model đơn giản nhất.  
-> 3. Thay dần bằng kỹ thuật over-engineer, đo accuracy trước và sau mỗi lần thay.  
-> 4. Khoảng 10:00 sáng 8/11: đóng băng code, cả team chuyển sang quay và dựng video.  
-> 5. 13:00: nộp.
+> 1. First 30 minutes: lock the event format. Everyone uses fake data in that format so nobody waits on anyone.  
+> 2. Main flow end to end with the simplest models.  
+> 3. Gradually swap in the over-engineered techniques, measuring accuracy before and after each swap.  
+> 4. Around 10:00 AM on 11/8: code freeze, whole team moves to recording and editing the video.  
+> 5. 13:00: submit.
 
-Trong lúc làm, mỗi người lưu lại video debug của phần mình (bounding box, mask, track ID, mesh tay). Đó là cảnh quay sẵn cho đoạn giới thiệu thuật toán.
+While working, everyone saves debug videos of their part (bounding boxes, masks, track IDs, hand meshes). Those are ready-made footage for the algorithm section.
 
-## **Triển khai**
+## **Implementation**
 
-Bắt đầu bằng docker-compose và dữ liệu giả để cả 4 người làm song song ngay. Kubernetes chỉ vào sau khi luồng chính đã chạy.
+Start with docker-compose and fake data so all 4 people can work in parallel right away. Kubernetes comes in only after the main flow runs.
 
 ### **Stack**
 
-| Lớp | Công cụ |
+| Layer | Tool |
 | :---- | :---- |
-| Ngôn ngữ | Python 3.11 \+ uv cho mọi service vision và backend |
-| Video từ điện thoại | Android: app IP Webcam stream MJPEG qua Wi-Fi, đọc bằng OpenCV; iPhone: Continuity Camera với Mac |
-| Nhận diện người | insightface (SCRFD, ArcFace), boxmot (BoT-SORT) |
-| Nhận diện món đồ | ultralytics YOLO và MediaPipe Hands cho bản đầu; transformers (Grounding DINO, DINOv2) và SAM 2 khi nâng cấp |
-| Event bus | Redpanda trong Docker |
-| Backend | FastAPI, Postgres làm event store, SSE đẩy cập nhật sang dashboard |
-| MCP server | Python MCP SDK (FastMCP), chỉ đọc |
+| Language | Python 3.11 \+ uv for all vision and backend services |
+| Phone video | Android: IP Webcam app streaming MJPEG over Wi-Fi, read with OpenCV; iPhone: Continuity Camera with the Mac |
+| Person recognition | insightface (SCRFD, ArcFace), boxmot (BoT-SORT) |
+| Item recognition | ultralytics YOLO and MediaPipe Hands for the first version; transformers (Grounding DINO, DINOv2) and SAM 2 when upgrading |
+| Event bus | Redpanda in Docker |
+| Backend | FastAPI, Postgres as the event store, SSE pushing updates to the dashboard |
+| MCP server | Python MCP SDK (FastMCP), read-only |
 | Dashboard | React (Vite) |
-| Hạ tầng | docker-compose trước; sau đó k3d \+ KEDA \+ Prometheus/Grafana |
+| Infrastructure | docker-compose first; then k3d \+ KEDA \+ Prometheus/Grafana |
 
-### **Cấu trúc repo**
+### **Repo layout**
 
-`fridge/`  
-  `contracts/              # định dạng sự kiện (JSON Schema), chốt đầu tiên`  
-  `tools/fake_events.py    # bắn sự kiện giả để không ai phải chờ ai`  
-  `services/person/        # Vai 1`  
-  `services/item/          # Vai 2`  
-  `services/backend/       # Vai 3: ghép sự kiện, matching, API, MCP`  
-  `dashboard/              # Vai 4`  
-  `eval/                   # clip test có nhãn + script đo accuracy`  
-  `infra/                  # docker-compose.yml, k8s/`
+See the repo root `README.md` for folder ownership and the Git workflow.
 
-### **Hai lưu ý trước khi bắt đầu**
+`contracts/              # event format (JSON Schema), locked first`  
+`tools/fake_events.py    # publishes fake events so nobody waits on anyone`  
+`services/person/        # Role 1`  
+`services/item/          # Role 2`  
+`services/backend/       # Role 3: event join, matching, API, MCP`  
+`dashboard/              # Role 4`  
+`eval/                   # labeled test clips + accuracy script`  
+`infra/                  # docker-compose.yml, k8s/`  
+`docs/                   # this document`
 
-> 1. GPU của Mac không dùng được từ trong container Docker hay k3d, vì container chạy trong máy ảo Linux. Vì vậy service vision chạy trực tiếp trên macOS và nói chuyện với Redpanda; k3d chỉ chứa backend, dashboard và các worker nhẹ. Phần demo autoscale dùng các worker nhẹ đó.  
-> 2. Wi-Fi ở hackathon thường chặn các thiết bị nói chuyện với nhau. Nếu điện thoại không stream được sang Mac, bật hotspot từ một điện thoại và cho Mac cùng hai điện thoại camera vào chung.
+### **Two notes before starting**
 
-### **Việc đầu tiên của từng vai**
+> 1. The Mac GPU can't be used from inside Docker or k3d containers, because containers run in a Linux VM. So vision services run directly on macOS and talk to Redpanda; k3d only holds the backend, dashboard and lightweight workers. The autoscaling demo uses those lightweight workers.  
+> 2. Hackathon Wi-Fi often blocks devices from talking to each other. If the phones can't stream to the Mac, turn on a hotspot from one phone and put the Mac and both camera phones on it.
 
-**Vai 1, nhận diện người (Thành viên 2\)**
+### **First tasks per role**
 
-> 1. Đọc stream từ Z Flip, chạy SCRFD \+ ArcFace, đăng ký gallery cho 4 người trong team.  
-> 2. Gắn BoT-SORT, gộp embedding theo từng track, publish person.seen.  
-> 3. Khi luồng chính đã chạy: thêm AdaFace, điểm chất lượng MagFace, ngưỡng conformal.
+**Role 1, person recognition (Member 2\)**
 
-**Vai 2, nhận diện món đồ (Thành viên 3\)**
+> 1. Read the stream from the Z Flip, run SCRFD \+ ArcFace, register a gallery for the 4 team members.  
+> 2. Add BoT-SORT, fuse embeddings per track, publish person.seen.  
+> 3. Once the main flow runs: add AdaFace, MagFace quality score, conformal threshold.
 
-> 1. Đọc stream từ điện thoại thứ hai; phát hiện cửa mở bằng độ sáng.  
-> 2. YOLO \+ MediaPipe Hands; xác định PUT/TAKE theo hướng vật đi qua một vạch ở cửa tủ; publish item.event.  
-> 3. Thêm DINOv2 \+ Hungarian để phân biệt món, rồi Grounding DINO \+ SAM 2\. Research HaMeR sớm vì nó phụ thuộc nặng vào GPU NVIDIA; nếu không chạy được trên Mac thì giữ MediaPipe.
+**Role 2, item recognition (Member 3\)**
 
-**Vai 3, backend và matching (Dang)**
+> 1. Read the stream from the second phone; detect door open by brightness.  
+> 2. YOLO \+ MediaPipe Hands; decide PUT/TAKE by the direction an item crosses a line at the fridge door; publish item.event.  
+> 3. Add DINOv2 \+ Hungarian to tell items apart, then Grounding DINO \+ SAM 2\. Research HaMeR early since it depends heavily on NVIDIA GPUs; if it doesn't run on Mac, keep MediaPipe.
 
-> 1. Trong 30 phút đầu: tạo repo, contracts/, fake\_events.py và docker-compose (Redpanda, Postgres), rồi chia cho cả team.  
-> 2. Ghép mỗi item.event với person.seen gần nhất bằng event-time window join có watermark, ghi fridge.event, dựng tồn kho từ log.  
-> 3. Matching \+ cảnh báo, API \+ SSE, rồi đến MCP server.
+**Role 3, backend and matching (Dang)**
 
-**Vai 4, dashboard, hạ tầng và video (Thành viên 4\)**
+> 1. In the first 30 minutes: create the repo, contracts/, fake\_events.py and docker-compose (Redpanda, Postgres), then hand it to the team.  
+> 2. Join each item.event with the nearest person.seen via an event-time window join with watermarks, write fridge.event, build inventory from the log.  
+> 3. Matching \+ alerts, API \+ SSE, then the MCP server.
 
-> 1. Dashboard chạy trên dữ liệu giả từ API của vai 3\.  
-> 2. Quay sớm khoảng 20–30 clip đặt và lấy đồ có ghi nhãn (ai, món gì, PUT hay TAKE) làm bộ test, và viết script đo accuracy. Đây là nguồn số liệu cho cảnh cuối video.  
-> 3. Ngay khi luồng chính chạy, quay một bản video dự phòng. Sau đó chuyển Redpanda lên cluster 3 node và thử tắt một node, rồi dựng k3d \+ KEDA \+ Grafana.
+**Role 4, dashboard, infra and video (Member 4\)**
 
-## **Kịch bản video demo**
+> 1. Dashboard running on fake data from Role 3's API.  
+> 2. Record about 20–30 labeled put/take clips early (who, which item, PUT or TAKE) as the test set, and write the accuracy script. This is the source of numbers for the final scene of the video.  
+> 3. As soon as the main flow runs, record a backup video. Then move Redpanda to a 3-node cluster and try killing a node, then set up k3d \+ KEDA \+ Grafana.
 
-Video dài khoảng 3 phút. Phút đầu cho thấy sản phẩm chạy thật, hai phút còn lại giới thiệu thuật toán và hạ tầng cho track over-engineered.
+## **Demo video script**
 
-| Thời gian | Cảnh | Trên màn hình | Ý thuyết minh |
+About 3 minutes long. The first minute shows the product actually working; the remaining two introduce the algorithms and infrastructure for the over-engineered track.
+
+| Time | Scene | On screen | Narration |
 | :---- | :---- | :---- | :---- |
-| 0:00–0:15 | Mở đầu | Ai đó mở tủ, hộp cơm của mình đã biến mất | "Ai lấy hộp cơm của tôi?" rồi đọc câu định danh dự án |
-| 0:15–0:45 | Đặt đồ | Người A đặt hộp sữa vào tủ; dashboard thêm món, ghi chủ là A | Mua về, đặt thẳng vào tủ, không tag, không app |
-| 0:45–1:10 | Lấy nhầm | Người B lấy hộp sữa; dashboard hiện cảnh báo | Hệ thống biết B vừa lấy đồ của A |
-| 1:10–1:50 | Nhận diện người | Chia màn hình: box mặt từ hai detector, track ID, điểm nhận diện; một người lạ bị đánh dấu "lạ" | Mỗi lớp sửa một lỗi: mặt nghiêng, frame mờ, người lạ |
-| 1:50–2:30 | Tay \+ vật | Mask SAM 2, mesh tay HaMeR, mặt phẳng 3D ở cửa tủ; hai món giống hệt nhau vẫn được phân biệt | Vì sao cần 3D và Hungarian algorithm |
-| 2:30–2:50 | Hạ tầng | Sơ đồ kiến trúc; giả lập nhiều tủ, số pod tăng lên, trace trên Grafana; tắt một broker mà hệ thống vẫn chạy | Model nặng nên cần event bus và autoscale |
-| 2:50–3:05 | MCP | Hỏi Claude: "Tuần này ai lấy đồ của A nhiều nhất?" | AI khác cũng đọc được dữ liệu tủ lạnh |
-| 3:05–3:15 | Kết | Bảng accuracy khi bật và tắt từng lớp | Over-engineered, nhưng mỗi lớp đều có lý do |
+| 0:00–0:15 | Opening | Someone opens the fridge; their lunch box is gone | "Who took my lunch?" then read the project's one sentence |
+| 0:15–0:45 | Putting an item | Person A puts a milk carton in the fridge; dashboard adds the item, owner A | Buy it, put it straight in the fridge: no tags, no app |
+| 0:45–1:10 | Wrong taker | Person B takes the milk carton; dashboard shows an alert | The system knows B just took A's item |
+| 1:10–1:50 | Person recognition | Split screen: face boxes from two detectors, track IDs, recognition scores; a stranger is flagged "unknown" | Each layer fixes one flaw: profile faces, blurry frames, strangers |
+| 1:50–2:30 | Hand \+ object | SAM 2 masks, HaMeR hand mesh, 3D plane at the fridge door; two identical items still told apart | Why 3D and the Hungarian algorithm are needed |
+| 2:30–2:50 | Infrastructure | Architecture diagram; simulated many fridges, pod count rising, traces on Grafana; kill a broker and the system keeps running | Heavy models need an event bus and autoscaling |
+| 2:50–3:05 | MCP | Ask Claude: "Who took A's food the most this week?" | Other AIs can read the fridge data too |
+| 3:05–3:15 | Closing | Accuracy table with each layer on and off | Over-engineered, but every layer has a reason |
 
-Các cảnh 1:10–2:50 chỉ đưa vào kỹ thuật thật sự chạy được; kỹ thuật nào bị cắt thì bỏ khỏi video. Quay từng cảnh riêng rồi ghép lại, và thuyết minh bằng tiếng Anh nếu ban giám khảo nói tiếng Anh.
+Scenes 1:10–2:50 include only techniques that actually work; anything cut is left out of the video. Record each scene separately and edit them together; narrate in English if the judges speak English.
 
-## **Phần cứng**
+## **Hardware**
 
-Chỉ dùng thiết bị team đang có; Jetson đang ở Việt Nam nên không nằm trong kế hoạch.
+Only equipment the team already has; the Jetson is in Vietnam, so it is not part of the plan.
 
-| Thiết bị | Vai trò |
+| Device | Role |
 | :---- | :---- |
-| Galaxy Z Flip (gập kiểu Flex mode) | Camera quay mặt người, stream video về Mac |
-| Điện thoại thứ hai của team | Quay món đồ và tay ở khu vực kệ tủ |
-| Mac | Chạy inference, backend và web dashboard |
+| Galaxy Z Flip (folded in Flex mode) | Camera facing people, streams video to the Mac |
+| The team's second phone | Films items and hands at the fridge shelves |
+| Mac | Runs inference, backend and web dashboard |
 
-## **Ngoài phạm vi**
+## **Out of scope**
 
-Những thứ dễ bị thêm vào giữa chừng nhưng **không làm**:
+Things that are easy to add mid-way but **will not be built**:
 
-> * Theo dõi hạn sử dụng, gợi ý công thức nấu ăn, danh sách đi chợ  
-> * App mobile riêng cho người dùng (chỉ có web dashboard)  
-> * Phạt tiền, thanh toán, hoặc gửi thông báo qua SMS/email  
-> * Nhiều tủ lạnh, nhiều camera cùng lúc  
-> * Deploy lên cloud; demo chạy local trên Mac  
-> * Tự train model từ đầu; dùng model có sẵn rồi ghép và tinh chỉnh
+> * Expiry-date tracking, recipe suggestions, shopping lists  
+> * A separate mobile app for users (web dashboard only)  
+> * Fines, payments, or SMS/email notifications  
+> * Multiple fridges or multiple cameras at once  
+> * Cloud deployment; the demo runs locally on the Mac  
+> * Training models from scratch; use existing models, then combine and fine-tune
 
-Quy tắc: ý tưởng mới ghi vào đây trước. Chỉ đưa vào phạm vi khi luồng chính (một người, một món, đặt vào rồi lấy ra) đã chạy trọn vẹn.
+Rule: new ideas go here first. They move into scope only after the main flow (one person, one item, put in then taken out) runs end to end.
 
-## **Quyết định**
+## **Decisions**
 
-Hackathon kết thúc lúc 13:00 ngày 8/11/2026 và nộp bằng video demo, không có phần pitch.
+The hackathon ends at 13:00 on 11/8/2026 and submission is a demo video, with no live pitch.
 
-| Câu hỏi | Quyết định |
+| Question | Decision |
 | :---- | :---- |
-| Nhận diện món đồ | Vision thuần, không QR hay sticker: người dùng mua đồ về và đặt thẳng vào tủ |
-| Camera | Hai điện thoại của team: Galaxy Z Flip quay mặt người, một điện thoại khác quay món đồ và tay |
-| Phát hiện cửa mở | Đề xuất, chờ chốt: không dùng IMU; camera món đồ tự phát hiện khi đèn trong tủ bật |
-| Liveness (chống giơ ảnh) | Đề xuất, chờ chốt: ngoài bản demo, chỉ làm nếu còn thời gian |
-| Body re-ID | Không làm |
-| Watermark join | Làm: hai camera lệch dữ liệu là vấn đề thật |
-| Shadow deployment | Không làm: số accuracy lấy từ script đo trên bộ clip test của vai 4 |
-| Cluster Redpanda 3 node \+ chaos test | Làm, sau khi luồng chính đã chạy với 1 node |
-| Team | 4 người, ai cũng code được mọi phần; vai theo phần Chia việc |
-| Sản phẩm nộp | Video demo |
-
+| Item recognition | Pure vision, no QR or stickers: users buy items and put them straight into the fridge |
+| Cameras | Two team phones: Galaxy Z Flip films people, another phone films items and hands |
+| Door-open detection | Proposed, pending: no IMU; the item camera detects the fridge light turning on |
+| Liveness (anti-spoofing) | Proposed, pending: outside the demo, only if time allows |
+| Body re-ID | Not doing it |
+| Watermark join | Doing it: data skew between two cameras is a real problem |
+| Shadow deployment | Not doing it: accuracy numbers come from Role 4's test clip script |
+| 3-node Redpanda cluster \+ chaos test | Doing it, after the main flow runs on 1 node |
+| Team | 4 people, everyone can code every part; roles as in Work split |
+| Deliverable | Demo video |

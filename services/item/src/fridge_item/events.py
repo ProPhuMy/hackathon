@@ -1,10 +1,10 @@
-"""Dựng sự kiện item.event đúng contracts/item.event.schema.json. Mọi chỗ publish phải đi qua đây."""
+"""Builds item.event events matching contracts/item.event.schema.json. Every publish must go through here."""
 import uuid
 from datetime import datetime, timezone
 
 
 def now_ts() -> str:
-    """UTC ISO 8601 có mili giây và hậu tố Z, đúng pattern trong contracts/."""
+    """UTC ISO 8601 with milliseconds and a Z suffix, matching the pattern in contracts/."""
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 

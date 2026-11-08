@@ -2,12 +2,12 @@
 # requires-python = ">=3.11"
 # dependencies = ["confluent-kafka", "jsonschema"]
 # ///
-"""Bắn sự kiện giả đúng contracts/ vào Redpanda để không ai phải chờ ai.
+"""Publish fake events matching contracts/ to Redpanda so nobody has to wait on anyone.
 
-Kịch bản demo: p_01 đặt hộp sữa, rồi p_02 lấy nhầm.
-    uv run tools/fake_events.py            # chạy 1 lần
-    uv run tools/fake_events.py --loop     # lặp mãi, mỗi kịch bản cách nhau 5s
-    uv run tools/fake_events.py --dry-run  # chỉ in ra, không cần Redpanda
+Demo scenario: p_01 puts a milk carton in, then p_02 takes it by mistake.
+    uv run tools/fake_events.py            # run once
+    uv run tools/fake_events.py --loop     # loop forever, 5s between scenarios
+    uv run tools/fake_events.py --dry-run  # print only, no Redpanda needed
 """
 import argparse
 import json
@@ -41,9 +41,9 @@ def item(type, item_id, label, confidence):
 
 def scenario():
     yield person(1, "p_01", 0.94)
-    yield item("PUT", "item_042", "hộp sữa", 0.90)
+    yield item("PUT", "item_042", "milk carton", 0.90)
     yield person(2, "p_02", 0.91)
-    yield item("TAKE", "item_042", "hộp sữa", 0.87)
+    yield item("TAKE", "item_042", "milk carton", 0.87)
 
 
 def main():
@@ -60,7 +60,7 @@ def main():
 
     while True:
         for ev in scenario():
-            VALIDATORS[ev["topic"]].validate(ev)  # sự kiện giả cũng phải đúng contract
+            VALIDATORS[ev["topic"]].validate(ev)  # fake events must match the contract too
             print(json.dumps(ev, ensure_ascii=False))
             if producer:
                 producer.produce(ev["topic"], key=ev["event_id"], value=json.dumps(ev, ensure_ascii=False))

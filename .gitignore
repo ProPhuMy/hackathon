@@ -8,7 +8,7 @@ __pycache__/
 node_modules/
 dist/
 
-# Model weights và video: KHÔNG đưa lên Git, chia sẻ qua Google Drive
+# Model weights and videos: NEVER commit, share via Google Drive
 *.pt
 *.pth
 *.onnx
@@ -21,6 +21,6 @@ models/
 eval/clips/
 debug_videos/
 
-# Máy
+# OS / local
 .DS_Store
 .env
