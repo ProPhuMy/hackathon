@@ -17,7 +17,7 @@ Verified on 2026-11-08 with the synthetic scenario (no cameras): Redpanda + Post
 
 1. Agree one ID list, for example `p_01` = Viet, `p_02` = Alice. Use exactly these IDs in person enrollment (step 0.2) and backend registration (step 5).
 2. Person service (`services/person/SETUP.md`): enroll each person with `uv run python -m src enroll --person-id p_01 --session-id enroll-p01-01 --source <phone1> --rotate <r>`, and calibrate a policy to `models/baseline-policy.json`. Use the same `--rotate` value everywhere.
-3. Item service (`services/item/README.md`): `uv run python -m src calibrate <phone2-url> --out config.json` to set the door line.
+3. Item service (`services/item/README.md`): `uv run python -m src calibrate <phone2-url> --out config.json` to set the door line. If phone 2 sits on top of the fridge looking down its front, set `"mode": "edge"` in `config.json` (item README section 6b). In edge mode a TAKE is stamped when the item first appears at the door line, so the taker must still face phone 1 at that moment; otherwise the TAKE has no actor and the wrong-owner alert is lost.
 4. Mac port 5432 must be free for the Compose Postgres (`lsof -i :5432`). Stop a native Postgres if one is running.
 
 ## 1. Check the clocks (Mac and GPU server)
