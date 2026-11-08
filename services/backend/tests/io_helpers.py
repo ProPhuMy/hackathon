@@ -66,7 +66,7 @@ class MockCursor:
         people = self.conn._tx_people if self.conn._in_transaction else self.conn._committed_people
         tables_created = self.conn._tx_tables if self.conn._in_transaction else self.conn._committed_tables
 
-        if "SET SEARCH_PATH" in sql_upper:
+        if "SET SEARCH_PATH" in sql_upper or "SET TRANSACTION" in sql_upper:
             self.rowcount = 0
             return self
 
@@ -231,6 +231,47 @@ class MockCursor:
 
             fridge_events[event_id] = payload_obj
             self.rowcount = 1
+            return self
+
+        if "FROM" in sql_upper and "FRIDGE_EVENTS" in sql_upper and "GROUP BY" in sql_upper:
+            # Aggregate trends query over fridge_events
+            start_str = params[0]
+            end_str = params[1]
+            owner_filter = params[2] if len(params) > 2 else None
+
+            s_clean = start_str.strip()
+            if s_clean.endswith("Z") or s_clean.endswith("z"):
+                s_clean = s_clean[:-1] + "+00:00"
+            start_dt = datetime.fromisoformat(s_clean).astimezone(timezone.utc)
+
+            e_clean = end_str.strip()
+            if e_clean.endswith("Z") or e_clean.endswith("z"):
+                e_clean = e_clean[:-1] + "+00:00"
+            end_dt = datetime.fromisoformat(e_clean).astimezone(timezone.utc)
+
+            grouped: dict[tuple[Any, Any, Any, Any], int] = {}
+            for ev in fridge_events.values():
+                ev_ts_str = ev.get("ts")
+                if not ev_ts_str:
+                    continue
+                ev_clean = ev_ts_str.strip()
+                if ev_clean.endswith("Z") or ev_clean.endswith("z"):
+                    ev_clean = ev_clean[:-1] + "+00:00"
+                ev_dt = datetime.fromisoformat(ev_clean).astimezone(timezone.utc)
+
+                if not (start_dt <= ev_dt < end_dt):
+                    continue
+
+                ev_owner = ev.get("owner_id")
+                if owner_filter is not None and ev_owner != owner_filter:
+                    continue
+
+                key = (ev.get("type"), ev.get("status"), ev.get("person_id"), ev_owner)
+                grouped[key] = grouped.get(key, 0) + 1
+
+            self._results = [(k[0], k[1], k[2], k[3], count) for k, count in grouped.items()]
+            self._idx = 0
+            self.rowcount = len(self._results)
             return self
 
         if "SELECT EVENT_ID, PAYLOAD FROM" in sql_upper and "FRIDGE_EVENTS" in sql_upper:
