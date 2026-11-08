@@ -4,9 +4,15 @@ import numpy as np
 import pytest
 
 from fridge_item.geometry import Box, DoorLine, Track
-from fridge_item.detect import to_tracks, Detector
+from fridge_item.detect import (
+    Detector,
+    GDinoDetector,
+    phrase_to_class,
+    to_tracks,
+    tracker_output_to_tracks,
+)
 from fridge_item.draw import overlay
-from fridge_item.__main__ import parse_args, probe_command
+from fridge_item.__main__ import evaluate_command, parse_args, probe_command
 
 
 def test_drops_rows_without_id():
@@ -229,3 +235,165 @@ def test_probe_command_flow(tmp_path: Path):
     mock_detector.assert_called_once_with(dummy_frame)
     mock_writer.write.assert_called_once()
     mock_writer.release.assert_called_once()
+
+
+def test_phrase_to_class_exact():
+    prompts = ["juice", "milk", "coke"]
+    assert phrase_to_class("Milk", prompts) == 1
+    assert phrase_to_class("  coke  ", prompts) == 2
+    assert phrase_to_class("JUICE", prompts) == 0
+
+
+def test_phrase_to_class_contained():
+    prompts = ["juice", "milk"]
+    assert phrase_to_class("carton of milk", prompts) == 1
+    assert phrase_to_class("orange juice bottle", prompts) == 0
+
+
+def test_phrase_to_class_longest_wins():
+    prompts = ["milk", "whole milk", "bottle"]
+    assert phrase_to_class("a fresh whole milk carton", prompts) == 1
+    prompts2 = ["juice", "apple juice", "bottle"]
+    assert phrase_to_class("the apple juice bottle", prompts2) == 1
+
+
+def test_phrase_to_class_no_match():
+    prompts = ["milk", "juice"]
+    assert phrase_to_class("banana", prompts) is None
+    assert phrase_to_class("", prompts) is None
+    assert phrase_to_class("milk", []) is None
+
+
+def test_tracker_output_to_tracks():
+    names = {0: "hand", 1: "milk"}
+    out = np.array([
+        [10.0, 20.0, 30.0, 40.0, 1.0, 0.95, 0.0, 0.0],
+        [50.0, 60.0, 70.0, 80.0, 2.0, 0.85, 1.0, 1.0],
+    ])
+    tracks = tracker_output_to_tracks(out, names, hand_label="hand")
+    assert len(tracks) == 2
+    assert tracks[0].id == 1
+    assert tracks[0].kind == "hand"
+    assert tracks[0].label == "hand"
+    assert tracks[0].box == Box(10.0, 20.0, 30.0, 40.0)
+
+    assert tracks[1].id == 2
+    assert tracks[1].kind == "item"
+    assert tracks[1].label == "milk"
+    assert tracks[1].box == Box(50.0, 60.0, 70.0, 80.0)
+
+    # Empty tracker output
+    assert tracker_output_to_tracks(np.empty((0, 8)), names, hand_label="hand") == []
+    assert tracker_output_to_tracks(None, names, hand_label="hand") == []
+
+
+def test_cli_detector_flag():
+    args_default = parse_args(["probe", "in.mp4", "out.mp4"])
+    assert args_default.detector == "yoloe"
+
+    args_gdino = parse_args(["probe", "in.mp4", "out.mp4", "--detector", "gdino"])
+    assert args_gdino.detector == "gdino"
+
+    args_run = parse_args(["run", "--source", "vid.mp4", "--detector", "gdino"])
+    assert args_run.detector == "gdino"
+
+    args_eval = parse_args(["evaluate", "--detector", "gdino"])
+    assert args_eval.detector == "gdino"
+
+
+def test_probe_command_selects_gdino(tmp_path: Path):
+    from fridge_item.config import Config
+
+    cfg = Config(
+        roi=(0, 0, 50, 50),
+        line=DoorLine(p1=(0.0, 25.0), p2=(50.0, 25.0), inside=(25.0, 40.0)),
+        door_on=100.0,
+        door_off=50.0,
+        prompts=["milk"],
+    )
+    dummy_frame = np.full((100, 100, 3), 120, dtype=np.uint8)
+    frames = [(dummy_frame, "2026-11-07T20:00:00.000Z")]
+
+    mock_gdino = MagicMock()
+    mock_gdino.return_value = []
+    mock_writer = MagicMock()
+
+    with patch("fridge_item.config.load", return_value=cfg), \
+         patch("fridge_item.detect.GDinoDetector", return_value=mock_gdino) as mock_gdino_cls, \
+         patch("fridge_item.__main__.iter_frames", return_value=iter(frames)), \
+         patch("cv2.VideoWriter", return_value=mock_writer):
+        probe_command("clip.mp4", str(tmp_path / "out.mp4"), detector="gdino")
+
+    mock_gdino_cls.assert_called_once_with(prompts=cfg.prompts, hand_label=cfg.hand_label)
+    mock_gdino.assert_called_once_with(dummy_frame)
+
+
+def test_evaluate_command_selects_gdino(tmp_path: Path, monkeypatch):
+    from fridge_item.config import Config, save
+
+    labels_file = tmp_path / "labels.csv"
+    labels_file.write_text("clip1.mp4,PUT,milk\n")
+    clips_dir = tmp_path / "clips"
+    clips_dir.mkdir()
+    (clips_dir / "clip1.mp4").touch()
+
+    cfg_file = tmp_path / "config.json"
+    save(
+        Config(
+            roi=(0, 0, 10, 10),
+            line=DoorLine((0, 5), (10, 5), (5, 0)),
+            door_on=100.0,
+            door_off=50.0,
+            prompts=["milk"],
+            hand_label="hand",
+        ),
+        cfg_file,
+    )
+    monkeypatch.setattr("fridge_item.stream.iter_frames", lambda src: iter([]))
+    mock_gdino = MagicMock()
+    mock_gdino.return_value = []
+    mock_factory = MagicMock(return_value=mock_gdino)
+
+    with patch("fridge_item.detect.GDinoDetector", mock_factory):
+        evaluate_command(
+            labels_path=str(labels_file),
+            clips_dir=str(clips_dir),
+            config_path=str(cfg_file),
+            detector="gdino",
+        )
+
+    mock_factory.assert_called_once_with(["milk"], "hand")
+
+
+def test_run_command_selects_gdino(tmp_path: Path, monkeypatch):
+    from fridge_item.config import Config, save
+    from fridge_item.__main__ import run_command
+
+    cfg_file = tmp_path / "config.json"
+    save(
+        Config(
+            roi=(0, 0, 10, 10),
+            line=DoorLine((0, 5), (10, 5), (5, 0)),
+            door_on=100.0,
+            door_off=50.0,
+            prompts=["milk"],
+            hand_label="hand",
+        ),
+        cfg_file,
+    )
+    monkeypatch.setattr("fridge_item.stream.iter_frames", lambda src: iter([]))
+    mock_gdino = MagicMock()
+    mock_gdino_cls = MagicMock(return_value=mock_gdino)
+
+    with patch("fridge_item.detect.GDinoDetector", mock_gdino_cls):
+        run_command(
+            source="dummy.mp4",
+            config_path=str(cfg_file),
+            gallery_path=str(tmp_path / "gallery.json"),
+            dry_run=True,
+            detector="gdino",
+        )
+
+    mock_gdino_cls.assert_called_once_with(prompts=["milk"], hand_label="hand")
+
+

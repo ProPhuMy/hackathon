@@ -4,9 +4,10 @@ version = "0.1.0"
 description = "Fridge Tracker item service"
 requires-python = ">=3.11,<3.12"
 dependencies = [
+    "boxmot>=26.0.0",
     "confluent-kafka>=2.16.1",
     "numpy>=2.4.6",
-    "opencv-python>=5.0.0.93",
+    "opencv-python>=4.11.0.86",
     "requests>=2.34.2",
     "scipy>=1.17.1",
     "torch>=2.8,<2.11",

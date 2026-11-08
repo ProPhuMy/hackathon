@@ -53,6 +53,7 @@ def evaluate_command(
     detector_factory: Callable[[list[str], str], Any] | None = None,
     embed: bool = False,
     holding: str = "box",
+    detector: str = "yoloe",
 ) -> dict[str, int]:
     """Run ItemPipeline over labeled clips with a fresh temporary gallery and detector per clip."""
     from fridge_item.config import load
@@ -67,9 +68,14 @@ def evaluate_command(
 
     cfg = load(config_path)
     if detector_factory is None:
-        from fridge_item.detect import Detector
+        if detector == "gdino":
+            from fridge_item.detect import GDinoDetector
 
-        detector_factory = Detector
+            detector_factory = GDinoDetector
+        else:
+            from fridge_item.detect import Detector
+
+            detector_factory = Detector
 
     embedder = None
     if embed:

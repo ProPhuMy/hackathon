@@ -34,14 +34,25 @@ def calibrate_command(source: str, out_path: str) -> None:
     calibrate(source, out_path)
 
 
-def probe_command(clip: str, out_path: str, config_path: str = "config.json") -> None:
+def probe_command(
+    clip: str,
+    out_path: str,
+    config_path: str = "config.json",
+    detector: str = "yoloe",
+) -> None:
     """Run detector and overlay on clip without logic, writing MP4 at 15 fps."""
     from fridge_item.config import load
-    from fridge_item.detect import Detector
     from fridge_item.draw import overlay
 
     cfg = load(config_path)
-    detector = Detector(prompts=cfg.prompts, hand_label=cfg.hand_label)
+    if detector == "gdino":
+        from fridge_item.detect import GDinoDetector
+
+        detector_model = GDinoDetector(prompts=cfg.prompts, hand_label=cfg.hand_label)
+    else:
+        from fridge_item.detect import Detector
+
+        detector_model = Detector(prompts=cfg.prompts, hand_label=cfg.hand_label)
 
     out_file = Path(out_path)
     out_file.parent.mkdir(parents=True, exist_ok=True)
@@ -66,7 +77,7 @@ def probe_command(clip: str, out_path: str, config_path: str = "config.json") ->
                 elif brightness <= cfg.door_off:
                     door_open = False
 
-            tracks = detector(frame)
+            tracks = detector_model(frame)
             annotated = overlay(frame, tracks, cfg.line, door_open, events=[])
             writer.write(annotated)
     except KeyboardInterrupt:
@@ -85,17 +96,24 @@ def run_command(
     debug_video: str | None = None,
     embed: bool = False,
     holding: str = "box",
+    detector: str = "yoloe",
 ) -> None:
     """Run item recognition pipeline, printing events, publishing to Kafka, and tracking latency."""
     from fridge_item.config import load
-    from fridge_item.detect import Detector
     from fridge_item.draw import overlay
     from fridge_item.gallery import ItemGallery
     from fridge_item.pipeline import ItemPipeline
 
     cfg = load(config_path)
     gallery = ItemGallery(gallery_path)
-    detector = Detector(prompts=cfg.prompts, hand_label=cfg.hand_label)
+    if detector == "gdino":
+        from fridge_item.detect import GDinoDetector
+
+        detector_model = GDinoDetector(prompts=cfg.prompts, hand_label=cfg.hand_label)
+    else:
+        from fridge_item.detect import Detector
+
+        detector_model = Detector(prompts=cfg.prompts, hand_label=cfg.hand_label)
 
     embedder = None
     if embed:
@@ -120,7 +138,7 @@ def run_command(
 
     def timed_detect(frame: np.ndarray):
         t0 = time.perf_counter()
-        tracks = detector(frame)
+        tracks = detector_model(frame)
         detect_times.append((time.perf_counter() - t0) * 1000.0)
         return tracks
 
@@ -226,9 +244,20 @@ def evaluate_command(
     detector_factory=None,
     embed: bool = False,
     holding: str = "box",
+    detector: str = "yoloe",
 ) -> dict[str, int]:
     """Evaluate item recognition pipeline against labeled clips."""
     from fridge_item.evaluate import evaluate_command as run_evaluate
+
+    if detector_factory is None:
+        if detector == "gdino":
+            from fridge_item.detect import GDinoDetector
+
+            detector_factory = GDinoDetector
+        else:
+            from fridge_item.detect import Detector
+
+            detector_factory = Detector
 
     return run_evaluate(
         labels_path=labels_path,
@@ -272,6 +301,12 @@ def parse_args(args: list[str] | None = None) -> argparse.Namespace:
         default="config.json",
         help="Path to config JSON (default: config.json)",
     )
+    probe_parser.add_argument(
+        "--detector",
+        choices=["yoloe", "gdino"],
+        default="yoloe",
+        help="Detector to use: yoloe or gdino (default: yoloe)",
+    )
 
     run_parser = subparsers.add_parser("run", help="Run item recognition pipeline")
     run_parser.add_argument(
@@ -313,6 +348,12 @@ def parse_args(args: list[str] | None = None) -> argparse.Namespace:
         default="box",
         help="Holding detection method: box overlap or SAM 2 mask overlap (default: box)",
     )
+    run_parser.add_argument(
+        "--detector",
+        choices=["yoloe", "gdino"],
+        default="yoloe",
+        help="Detector to use: yoloe or gdino (default: yoloe)",
+    )
 
     evaluate_parser = subparsers.add_parser(
         "evaluate", help="Evaluate item recognition pipeline against labeled clips"
@@ -343,6 +384,12 @@ def parse_args(args: list[str] | None = None) -> argparse.Namespace:
         default="box",
         help="Holding detection method: box overlap or SAM 2 mask overlap (default: box)",
     )
+    evaluate_parser.add_argument(
+        "--detector",
+        choices=["yoloe", "gdino"],
+        default="yoloe",
+        help="Detector to use: yoloe or gdino (default: yoloe)",
+    )
 
     return parser.parse_args(args)
 
@@ -354,7 +401,15 @@ def main(args: list[str] | None = None) -> None:
     elif parsed.subcommand == "calibrate":
         calibrate_command(parsed.source, parsed.out)
     elif parsed.subcommand == "probe":
-        probe_command(parsed.clip, parsed.out, parsed.config)
+        if parsed.detector != "yoloe":
+            probe_command(
+                clip=parsed.clip,
+                out_path=parsed.out,
+                config_path=parsed.config,
+                detector=parsed.detector,
+            )
+        else:
+            probe_command(parsed.clip, parsed.out, parsed.config)
     elif parsed.subcommand == "run":
         run_command(
             source=parsed.source,
@@ -365,6 +420,7 @@ def main(args: list[str] | None = None) -> None:
             debug_video=parsed.debug_video,
             embed=parsed.embed,
             holding=parsed.holding,
+            detector=parsed.detector,
         )
     elif parsed.subcommand == "evaluate":
         evaluate_command(
@@ -373,6 +429,7 @@ def main(args: list[str] | None = None) -> None:
             config_path=parsed.config,
             embed=parsed.embed,
             holding=parsed.holding,
+            detector=parsed.detector,
         )
 
 
