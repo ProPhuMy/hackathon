@@ -1,0 +1,53 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: topics-bootstrap
+  namespace: fridge
+spec:
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        app: topics-bootstrap
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: topics-bootstrap
+          image: docker.redpanda.com/redpandadata/redpanda:v24.2.7
+          command:
+            - sh
+            - -eu
+            - -c
+            - |
+              BROKER="redpanda.fridge.svc.cluster.local:9092"
+              echo "Checking existing topics from broker at $BROKER..."
+              EXISTING_TOPICS=$(rpk topic list -X brokers="$BROKER")
+              echo "$EXISTING_TOPICS"
+
+              for t in person.seen item.event fridge.event; do
+                if echo "$EXISTING_TOPICS" | grep -qw "$t"; then
+                  echo "Topic '$t' already exists, skipping creation."
+                else
+                  echo "Creating topic '$t'..."
+                  rpk topic create "$t" -p 1 -r 1 -X brokers="$BROKER"
+                fi
+              done
+
+              echo "Verifying all required topics exist..."
+              CURRENT_TOPICS=$(rpk topic list -X brokers="$BROKER")
+              echo "$CURRENT_TOPICS"
+
+              for t in person.seen item.event fridge.event; do
+                if ! echo "$CURRENT_TOPICS" | grep -qw "$t"; then
+                  echo "Verification failure: topic '$t' missing from broker." >&2
+                  exit 1
+                fi
+              done
+              echo "Topic bootstrap verification successful."
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
