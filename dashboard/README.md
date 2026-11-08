@@ -112,3 +112,22 @@ To connect the dashboard to the real backend service:
 3. In production builds, configure the backend base URL using the `VITE_API_BASE` environment variable if not serving from `/api`.
 4. If the backend is unreachable, the dashboard automatically falls back to illustrative demo data and continues retrying in the background.
 
+## Production image
+
+Build the nonroot production image from the repository root:
+
+```sh
+docker build -t fridge-dashboard:dev --build-arg VITE_API_BASE=/api dashboard
+```
+
+Run locally against a backend running on host port 8000:
+
+```sh
+docker run --rm -p 127.0.0.1:8081:8080 \
+  -e BACKEND_HOST=host.docker.internal \
+  -e BACKEND_PORT=8000 \
+  fridge-dashboard:dev
+```
+
+In Kubernetes (`infra/k8s/base/dashboard.yaml`), `BACKEND_HOST` is configured to point to the backend service (`backend.fridge.svc.cluster.local`).
+
