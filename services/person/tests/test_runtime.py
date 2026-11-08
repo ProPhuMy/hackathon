@@ -123,3 +123,71 @@ def test_reconnect_boundary_requires_fresh_evidence_and_segment(tmp_path, monkey
     assert len(events) == 2
     assert events[1]['track_id'] != events[0]['track_id']
     assert events[1]['ts'].endswith('01.000Z')
+
+
+def test_ensemble_runtime_conformal_decision_and_dispatch(tmp_path, monkeypatch, capsys):
+    from fridge_person.gallery import Gallery, atomic_json
+    class Vision:
+        signature = 'test-model'
+        def __init__(self, *args):
+            pass
+        def single_face(self, image):
+            return image
+    class Capture:
+        def __init__(self, *args):
+            pass
+        def __enter__(self):
+            # 6 frames at 0.1s interval to span >= 0.4s
+            return iter([
+                ((np.array([1., 0.]), 1.), 100., f'2026-01-01T00:00:0{i:05.3f}Z')
+                for i in range(6)
+            ])
+        def __exit__(self, *args):
+            pass
+
+    monkeypatch.setattr(runtime, 'Vision', Vision)
+    monkeypatch.setattr(runtime, 'Capture', Capture)
+    monkeypatch.setattr(runtime.time, 'monotonic', lambda: 100.)
+
+    g_arc = Gallery(tmp_path / 'gallery.json', Vision.signature)
+    g_arc.enroll('a', [[1., 0.]] * 10)
+    g_ada = Gallery(tmp_path / 'gallery_adaface.json', 'test-ada')
+    g_ada.enroll('a', [[1., 0.]] * 10)
+
+    policy_path = tmp_path / 'ensemble_policy.json'
+    policy_data = {
+        'version': 1,
+        'alpha': 0.1,
+        'prefix_s': 1.0,
+        'binding': '0' * 64,
+        'identities': ['a'],
+        'coefficients': [2.0, 2.0],
+        'intercept': 0.0,
+        'gates': {'accept': 0.5, 'reject': 0.2, 'margin': 0.0},
+        'conformal': {'a': [0.1] * 10},
+        'development_manifest': 'dev.csv',
+        'gallery': g_arc.fingerprint,
+        'model': Vision.signature
+    }
+    policy_path.write_text(json.dumps(policy_data))
+
+    args = SimpleNamespace(
+        command='run',
+        detector=None,
+        recognizer=None,
+        gallery=g_arc.path,
+        ada_gallery=g_ada.path,
+        person_id=None,
+        source='fake',
+        replay_origin='2026-01-01T00:00:00Z',
+        broker=None,
+        policy=policy_path,
+        schema=runtime.Path('../../contracts/person.seen.schema.json')
+    )
+
+    runtime.execute(args)
+    events = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert len(events) >= 1
+    assert events[0]['person_id'] == 'a'
+    assert events[0]['confidence'] > 0.5
+

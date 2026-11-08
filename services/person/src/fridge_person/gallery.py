@@ -93,3 +93,39 @@ class Gallery:
         vector = unit(vector)
         return {person: float(max(np.dot(vector, template) for template in templates))
                 for person, templates in self.people.items()}
+
+
+class DualGallery:
+    """Manages strictly separate ArcFace and AdaFace galleries with identical identities."""
+    def __init__(self, arcface_gallery, adaface_gallery):
+        self.arcface = arcface_gallery
+        self.adaface = adaface_gallery
+        if set(self.arcface.people.keys()) != set(self.adaface.people.keys()):
+            raise ValueError('DualGallery identities mismatch; ArcFace and AdaFace must cover the same people')
+
+    @property
+    def people(self):
+        return set(self.arcface.people.keys())
+
+    @property
+    def fingerprint(self):
+        return hashlib.sha256(f'{self.arcface.fingerprint}:{self.adaface.fingerprint}'.encode()).hexdigest()
+
+    def enroll(self, person, arc_samples, ada_samples, provenance=None):
+        self.arcface.enroll(person, arc_samples, provenance=provenance)
+        try:
+            self.adaface.enroll(person, ada_samples, provenance=provenance)
+        except Exception:
+            try:
+                self.arcface.remove(person)
+            except Exception:
+                pass
+            raise
+
+    def remove(self, person):
+        self.arcface.remove(person)
+        self.adaface.remove(person)
+
+    def scores(self, arc_vector, ada_vector):
+        return self.arcface.scores(arc_vector), self.adaface.scores(ada_vector)
+

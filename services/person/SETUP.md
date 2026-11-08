@@ -399,5 +399,8 @@ Supported ONNX graph layout:
   confidence math, landmark-box pairing, invalid layouts, and WBF fusion.
 - No real-weight smoke test is claimed for YOLO5Face until a verified exported artifact is
   provided locally.
-- Full five-network runtime integration still requires BoT-SORT, separate AdaFace gallery
-  enrollment, temporal integration, and calibrated quality weighting.
+- Full five-network runtime integration is now implemented:
+  - `DualGallery` ensures strictly separate template stores and independent coordinate spaces for ArcFace and AdaFace without vector-space averaging.
+  - `FaceTracker` and `FaceTrack` implement BoT-SORT-style motion and appearance tracking using Kalman filters, IoU distance, and ArcFace appearance association, enforcing appearance continuity (rejecting cosine < 0.3) and per-track temporal evidence windows.
+  - MagFace raw norm quantiles provide quality weighting for robust spherical temporal aggregation with angular outlier rejection.
+  - `runtime.py` handles both baseline and calibrated conformal ensemble policies, outputting valid `person.seen` events with calibrated confidence and class-conditional conformal candidate evaluation.

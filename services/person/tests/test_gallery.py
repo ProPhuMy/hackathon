@@ -37,3 +37,32 @@ def test_gallery_fingerprint_stays_stable_for_real_dimension_vectors(tmp_path):
     vector = np.random.default_rng(2).normal(size=512)
     gallery.enroll('p_01', [vector] * 10)
     assert gallery.fingerprint == Gallery(gallery.path, 'a').fingerprint
+
+
+def test_dual_gallery_enrollment_scoring_and_removal(tmp_path):
+    from fridge_person.gallery import DualGallery
+    arc_path = tmp_path / 'arcface.json'
+    ada_path = tmp_path / 'adaface.json'
+    g_arc = Gallery(arc_path, 'arc-v1')
+    g_ada = Gallery(ada_path, 'ada-v1')
+    dual = DualGallery(g_arc, g_ada)
+
+    assert dual.people == set()
+    dual.enroll('p_01', [[1., 0.]] * 10, [[0., 1.]] * 10)
+    assert dual.people == {'p_01'}
+    
+    arc_scores, ada_scores = dual.scores([1., 0.], [0., 1.])
+    assert np.isclose(arc_scores['p_01'], 1.)
+    assert np.isclose(ada_scores['p_01'], 1.)
+
+    # Mismatched model/identity check
+    g_ada.enroll('p_02', [[0., 1.]] * 10)
+    with pytest.raises(ValueError, match='DualGallery identities mismatch'):
+        DualGallery(Gallery(arc_path, 'arc-v1'), g_ada)
+
+    # Removal removes from both
+    g_ada.remove('p_02')
+    dual3 = DualGallery(Gallery(arc_path, 'arc-v1'), Gallery(ada_path, 'ada-v1'))
+    dual3.remove('p_01')
+    assert dual3.people == set()
+

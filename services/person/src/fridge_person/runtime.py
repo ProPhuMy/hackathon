@@ -39,6 +39,7 @@ def execute(args):
         if origin.tzinfo is None or origin.utcoffset().total_seconds() != 0:
             raise ValueError('Replay origin must be UTC')
     producer = None
+    engine = None
     if args.command == 'run':
         if not gallery.people:
             raise ValueError('Enroll people first')
@@ -47,14 +48,74 @@ def execute(args):
             raise ValueError('Policy is incompatible with current gallery/model; recalibrate')
         if not policy.get('development_manifest'):
             raise ValueError('Policy must identify its held-out development manifest')
-        accept, reject, margin = (policy[key] for key in ('accept', 'reject', 'margin'))
-        decision({person: 0. for person in gallery.people}, accept, reject, margin)
+        
+        is_ensemble = 'conformal' in policy
+        if is_ensemble:
+            from .ensemble import predict
+            ada_arg = getattr(args, 'ada_gallery', None)
+            if ada_arg and Path(ada_arg).is_file():
+                ada_gallery = Gallery(ada_arg, json.loads(Path(ada_arg).read_text())['model'])
+            else:
+                default_ada = args.gallery.parent / 'gallery_adaface.json'
+                if default_ada.is_file():
+                    ada_gallery = Gallery(default_ada, json.loads(default_ada.read_text())['model'])
+                else:
+                    ada_gallery = gallery
+
+            class EnsembleEngine:
+                def __init__(self, g_arc, g_ada, pol):
+                    self.g_arc = g_arc
+                    self.g_ada = g_ada
+                    self.policy = pol
+                    from .recognition import Evidence
+                    self.evidence = Evidence()
+                    self.accepted = None
+                    self.generation = 0
+
+                def reset(self):
+                    self.evidence.clear()
+                    self.accepted = None
+                    self.generation += 1
+
+                def _evaluate(self, vec):
+                    arc_scores = self.g_arc.scores(vec)
+                    ada_scores = self.g_ada.scores(vec)
+                    res = predict(self.policy, arc_scores, ada_scores)
+                    if res['state'] == 'known':
+                        return res['person_id'], float(res['confidence'])
+                    elif res['state'] == 'unknown':
+                        return None, 0.0
+                    return None
+
+                def observe(self, vector, weight, now):
+                    instant = self._evaluate(vector)
+                    if self.accepted is not None and (instant is None or instant[0] != self.accepted):
+                        self.reset()
+                    prev_cnt = len(self.evidence.samples)
+                    mean = self.evidence.observe(vector, weight, now)
+                    if prev_cnt and len(self.evidence.samples) == 1:
+                        self.accepted = None
+                        self.generation += 1
+                    if mean is None:
+                        return None
+                    res = self._evaluate(mean)
+                    if res is None:
+                        self.reset()
+                    else:
+                        self.accepted = res[0]
+                    return res
+
+            engine = EnsembleEngine(gallery, ada_gallery, policy)
+        else:
+            accept, reject, margin = (policy[key] for key in ('accept', 'reject', 'margin'))
+            decision({person: 0. for person in gallery.people}, accept, reject, margin)
+            engine = Baseline(gallery.scores, policy)
+
         validator = Draft202012Validator(json.loads(args.schema.read_text()))
         if args.broker:
             from confluent_kafka import Producer
             producer = Producer({'bootstrap.servers': args.broker, 'enable.idempotence': True,
                                  'queue.buffering.max.messages': 10, 'delivery.timeout.ms': 5000})
-    engine = Baseline(gallery.scores, policy) if args.command == 'run' else None
     engine_generation = None
     samples = []
     last_sample = -float('inf')
