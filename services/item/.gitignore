@@ -2,3 +2,5 @@ data/gallery.json
 debug/
 *.mp4
 data/clips/
+.mobileclip*
+*.part
