@@ -1,86 +1,66 @@
-# Resume checkpoint — dashboard branch
+# Resume checkpoint — 2026-11-07, 23:34 local
 
-Saved at user request to summarize and wrap up on2026-11-07 (local time).
-No agents remain running. This is a persistent handoff, not an automatic retry.
+User requested a wrap-up after authorizing parallel agy work and a30–60minute delivery target. All agy workers are paused. No automatic continuation is scheduled. Resume when asked.
 
-## Branches and workflow
+## Saved state
 
-- Main was synchronized and pushed at88bcbab earlier. Further development is on
-  **dashboard**, as the project overview requires. Do not implement on main.
-- **dashboard-live-wip**, local commit **2ce1222**, preserves the UNACCEPTED agy
-  live-data/serving candidate. It is not merged into dashboard or published.
-  Do not apply it without fixing the findings below. The branch survives cleanup
-  of temporary worktrees; its files can be recovered with Git.
-- agy writes implementation code: detailed brief → worker plan → lead review →
-  worker implementation → actual diff/check/browser review. At most two workers.
-- Dashboard acceptance comes first, then infrastructure. Video waits until the
-  project is complete. Do not resume coding until the user asks to continue.
+- Develop on `dashboard`; never implement on `main`.
+- Accepted dashboard source remains `4a0dfd1` (already on origin/dashboard). It includes the unchanged, content-hashed fridge asset and accepted demo experience.
+- Local **dashboard-live-wip at `4777d76`** preserves the latest UNACCEPTED live integration and partial revisions. It includes accepted dashboard changes through merge checkpoint `180560b`.
+- Local **dashboard-serving-wip at `180560b`** has no new serving edits. The reviewed plan is saved; implementation was interrupted before writing files.
+- Local **dashboard-infra-wip at `4a0dfd1`** has no infrastructure code. Plan and mandatory lead corrections are saved.
+- These WIP branches are local only. Do not merge/push them as accepted work.
+- Agy workflow: detailed brief → plan → lead review → agy code → actual diff/tests/browser review. User explicitly authorized more parallel workers. Give editing workers separate checkouts with the required pending baseline and disjoint file ownership.
 
-## Accepted and verified
+## What actually passed in the latest candidate
 
-- Existing interactive fridge/demo, responsive controls, route panels, stable demo
-  slot mapping, focus return, reversible3.8s journey and static fallback preserved.
-- Model now lives at src/assets/mini-fridge.glb and uses Vite content-hashed delivery.
-  Blender exporter and model checks use that path. GLB and .blend bytes unchanged.
-- Explicit native tools in editing-worker role definitions fix agy's missing
-  write/terminal tools. See reviews/worker-tooling.md for verified configuration.
-- Final accepted-branch gates PASS: npm run build; npm run lint;
-  node tools/checks/fridge-motion.mjs; routes.mjs; mapping.mjs; model-asset.mjs.
-  Build still warns about the approximately1.05MB minified lazy3D chunk.
-- Phong backend previously passed191 tests including isolated livePostgres tests.
-  Fake-event PUT→TAKE→mismatch alert was verified through real Kafka, Postgres,
-  API and SSE. This is not camera-based end-to-end validation.
-- Independent baseline QA completed with explicit coverage gaps; UI/UX reviewed
-  the live candidate. Final independent combined-preview sign-off remains pending.
+Lead reran: build, lint, fridge-motion, mapping, model-asset, and live-adapter checks — PASS. The lazy3D chunk warning remains. Browser under React StrictMode loaded real Test owner/Test taker from backend and showed connected SSE with no page errors.
 
-## Next assignments in priority order
+**routes.mjs FAILS**: `/items/cold brew` differs from expected `/items/cold%20brew`. Review TanStack internal-path versus browser URL semantics and exercise real IDs; do not simply weaken the assertion.
 
-| Owner | Work / dependency | Owned files or artifacts | Definition of done |
+The adapter tests passing does not establish full acceptance. Full registration/reload/409 browser checks, final responsive review, actual Nginx tests, and independent combined QA have not run on this checkpoint.
+
+## Remaining work, in order
+
+| Owner | Assignment / owned files | Dependency | Done when |
 | --- | --- | --- | --- |
-| frontend-integrator | Revise local2ce1222 against accepted dashboard/model baseline | App.jsx/App.css, api.js, fridgeController.js, useFridgeData.js, demoData.js, itemMapping.js, focused checks | Fix StrictMode disposal/reuse that leaves initializing forever; bound snapshot/registration requests; truthful reconnect/error/loading states; reject malformed records; stable IDs and metadata-only registration; meaningful regression checks |
-| ui-ux-designer → frontend-integrator | Apply reviewed live-state handoff after lifecycle fix | reviews/live-ux-handoff.md, live layout/copy in App | No interior overlap at320×568; clear retry status; readable registration and truthful unknown enrollment; no backend jargon; preserve accepted demo layouts |
-| frontend-integrator | Replace invalid production proof and repair actual serving | Dockerfile, nginx.conf.template, .dockerignore, production-serving.mjs, README | Actual built nonroot Nginx starts; env substitution works; real HTTP deep links/cache/static404/API/SSE pass. Current test mimics Nginx with a Node server and is REJECTED. No dummy model inserted into dist |
-| visual-qa | Depends on reviewed combined candidate | integrated preview and fresh screenshot/report evidence | Independent desktop,390×844,320×568,844×390; demo/live modes; keyboard/touch/focus/interruptions; realID routes; registration/reload/409; SSE reconnect; reduced motion; model/WebGL fallbacks; status and data agree |
-| motion-engineer | Only if combined QA identifies a motion/input regression | fridgeMotion.mjs/Fridge3D.jsx and targeted evidence | Reproduced failure fixed without unrelated timing changes; existing motion and picking checks plus browser reproduction pass |
-| 3d-modeler | Asset release COMPLETE; remaining device/addon work depends on tools/hardware | tools/blender, model performance evidence | Responsive Blender addon permits read-only verification/rebuild proof; real-device profiling drives any LOD/material changes. Do not rebuild merely to resume this task |
-| frontend-integrator (infrastructure role) + visual-qa | Starts after dashboard acceptance; latest teammate contracts available | infra/k8s only, infrastructure plan/runbook/evidence | Reviewed agy plan, then reproducible local k3d deployment and verification; stage one-node flow before3-broker resilience/KEDA/observability. Keep backend singleton unless Phong supplies safe scaling contract |
+| frontend-integrator — live source | `src/api.js`, `fridgeController.js`, `useFridgeData.js`, `App.jsx`, `App.css`, relevant checks | Start from local4777d76 plus current accepted docs | Resolve route failure; prove encoded real-ID navigation/reload; finish UI corrections below; verify timeout/retry/disposal/reconnect truth with real browser and focused tests |
+| frontend-integrator — serving, separate instance | Dockerfile, nginx.conf.template, .dockerignore, production-serving.mjs, README production sections | Can code independently now from serving plan; final build requires corrected live source | Real nonroot Nginx starts, env substitution works, deep links/static404/cache/API/SSE pass against explicit PRODUCTION_URL; no fake frontend or dummy model |
+| ui-ux-designer | Review live copy/layout and handoff evidence | Updated source preview | No320px interior overlap, truthful loading/stale/enrollment wording, clear touch/keyboard controls and registration |
+| visual-qa | Independent combined preview screenshots/report | Reviewed source + serving combined by lead | Desktop,390×844,320×568,844×390; demo/live, keyboard/touch/focus, interruption, reduced motion, fallback, six demo mesh/button mappings, real IDs, registration and reconnect all checked; gaps explicit |
+| motion-engineer | Motion/input regressions only, if QA finds one | Specific reproduced finding | Preserve accepted camera/door timing and pass targeted regression checks |
+| 3d-modeler | Asset release complete; addon/device profiling queued | Responsive Blender addon or real device | Read-only Blender verification and measured performance evidence; no speculative model rebuild |
+| frontend-integrator — infrastructure | `infra/k8s/` only | Dashboard acceptance; reviewed plan corrections | Runnable isolated k3d core with singleton backend, Postgres, Redpanda, live dashboard; fake PUT/TAKE/mismatch verified; then3-broker recovery, KEDA CPU consumer and Prometheus/Grafana |
 
-Exact mandatory code/serving findings and reproduction notes:
-[reviews/live-integration-revisions.md](reviews/live-integration-revisions.md).
-UI evidence and lead corrections:
-[reviews/live-ux-handoff.md](reviews/live-ux-handoff.md).
+### Live source review still required
 
-Important serving failures: NGINX_ENVSUBST_FILTER used space-separated names,
-so actual nginx -t failed “unknown backend_host variable”; generic extension
-routing would break real IDs ending .png while /missing.js falls back to HTML.
-The candidate's passing synthetic server test does not establish production health.
+- Current App still says “Face recognition enrollment is completed on-device.” This is unsupported. Backend enrollment is UNKNOWN; registration is metadata only.
+- History rows remain mouse-only (`tr onClick`). Add an actual keyboard-operable control.
+- Owner options mix demo person IDs (`khang`) with inventory names (`Khang`), potentially producing duplicate labels/empty filters. Live filtering must use stable IDs only. The `all` sentinel also collides with a valid person ID. Verify both modes and duplicate names.
+- Verify real IDs with spaces, slashes, percent signs and file extensions. Avoid double encoding. Live event lookup must not accidentally use the demo timestamp alias.
+- The fresh controller fixes the observed StrictMode loading failure. Later fixes for stale-on-reconnect, registration cancellation and strict validation are present and adapter checks pass, but need final diff review and browser recovery proof.
+- Mobile controls now use a flow wrapper, but no final screenshot/layout proof has been reviewed for it. Do not assume the collision is solved from CSS alone.
+- Validate required record fields without coercing malformed confidence/status/type into verified events. Preserve valid nullable owners/people.
 
-## Dependencies and remaining gaps
+### Production and infrastructure briefs
 
-- No live fridge shelf/model placement contract: illustrative geometry must never
-  bind real item043 to demoFood_0; live inventory remains accessible as a list.
-- People API persists metadata and returns enrollment_status unknown. Viet now has
-  CLI enrollment, but no dashboard face-enrollment API. Do not infer enrollment.
-- Real Safari/iOS/Android/older-device profiling and physical screen-reader checks
-  remain unverified. Blender addon handshake previously timed out. Figma handoff
-  sync and measured material/LOD work are queued, not release claims.
-- Newly merged person/item recognition pipelines need teammate end-to-end camera
-  validation. Latest overview permits cloudGPU inference with Mac thin clients;
-  Khang's local k3d hosts backend/dashboard/lightweightCPU workers only.
-- Docker Desktop has about8GB assigned on a24GB Mac; account for that in infra
-  planning. k3d/helm were not installed; kubectl had no active context.
-- Infrastructure implementation and final video have not started.
+- [Production serving brief](briefs/production-serving-parallel.md) and [reviewed plan](reviews/production-serving-plan.md).
+- [Infrastructure brief](briefs/infrastructure-parallel.md) and [draft plus mandatory lead corrections](reviews/infrastructure-plan.md).
+- [Combined QA brief](briefs/combined-live-qa.md).
+- Earlier detailed defects: [live integration revisions](reviews/live-integration-revisions.md); UI evidence: [live UX handoff](reviews/live-ux-handoff.md).
 
-## Runtime and resumption
+Infrastructure has NOT been implemented or deployed. k3d/helm remain uninstalled; kubectl had no current context. Core first, then replicated-broker recovery and autoscaling/observability. Keep backend replicas1/Recreate; no safe horizontal matcher contract exists. Do not edit teammate services or shared root files. No cloud provisioning or GPU models in k3d.
 
-Accepted demo preview: http://127.0.0.1:5176/ (confirm it is still running).
-Temporary candidate preview5178 and test backend8000 were stopped during wrap-up.
-Test containers fridge-review-postgres and infra-redpanda-1 were stopped, preserving
-state; native hostPostgres5432 was not changed. Docker Desktop remains running.
-Restart only when needed. TestPostgres uses127.0.0.1:15432; Redpanda19092.
-Create person.seen, item.event, fridge.event topics BEFORE starting backend.
+## Runtime / recovery
 
-Temporary workspace pointer: /private/tmp/fridge-dashboard-active.txt.
-Do not rely on temporary files surviving. Start fresh workers from dashboard plus
-reviewed WIP files, with separate checkouts and credentials excluded. Keep
-source tests and accepted artifact checks meaningful; never weaken them to pass.
+Worktree pointer: `/private/tmp/fridge-dashboard-active.txt`.
+Team root: `/var/folders/wt/jmtpq7xx6dg_7qkwsqv1t3fm0000gn/T/fridge-dashboard-zgvb55xu`.
+Subdirectories: frontend-integrator, serving, infrastructure; briefs/results retain raw worker evidence. Git branches preserve implementation if temporary directories disappear.
+
+Wrap-up stops candidate previews5178/5179, test backend8000, and our containers fridge-review-postgres (15432) / infra-redpanda-1 (19092), preserving their data. Native Postgres5432 and Docker Desktop are untouched. Accepted demo preview5176 is retained if running.
+
+On resume, start review containers and confirm person.seen/item.event/fridge.event topics before backend. Use POSTGRES_DSN pointing to isolated15432 and API_HOST=0.0.0.0 for Docker proxy access. Live Vite uses VITE_API_BASE=/api and VITE_BACKEND_URL=http://127.0.0.1:8000. Demo preview uses empty VITE_API_BASE. Never read or print .env credentials.
+
+Worker conversations: live source a4fc4495-2d9d-4ead-8d98-009000481fe5; serving plan d2556b03-2798-41b7-badc-b3796d0e6823; serving code4a28b6d8-cf34-4ede-88cc-70ca3a3906d5; infrastructure plan9142ee6b-4f16-4820-9f1f-f050688e672a. Prefer fresh implementation sessions with explicit native tool declarations; scoped settings retained in teamroot. No Docker access is required for coding workers; lead runs containers.
+
+Real camera/face-enrollment validation, Safari/physical-phone checks, Blender addon handshake, and older-device GPU profiling remain external gaps. Video is deliberately deferred until project completion.
