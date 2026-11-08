@@ -1,4 +1,5 @@
 from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -169,8 +170,6 @@ def test_take_many_no_embeddings_falls_back_to_labels(tmp_path: Path):
     assert gallery.items() == {}
 
 
-
-
 def test_empty_file_raises_value_error(tmp_path: Path):
     path = tmp_path / "gallery.json"
     path.write_text("", encoding="utf-8")
@@ -210,4 +209,3 @@ def test_item_empty_id_or_missing_label_raises_value_error(tmp_path: Path):
     with pytest.raises(ValueError) as excinfo2:
         ItemGallery(path2)
     assert str(path2) in str(excinfo2.value)
-

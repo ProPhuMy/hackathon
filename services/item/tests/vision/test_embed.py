@@ -1,5 +1,6 @@
 import sys
 from unittest.mock import MagicMock
+
 import numpy as np
 import pytest
 
@@ -42,7 +43,6 @@ def test_embedder_call_mocked(monkeypatch):
 
     mock_proc_instance = MagicMock()
     mock_proc_instance.return_value.to.return_value = {"pixel_values": "dummy"}
-    mock_proc_cls = MagicMock(return_value=mock_proc_instance)
 
     mock_output = MagicMock()
     # DINOv2 CLS token (384,)
@@ -55,7 +55,6 @@ def test_embedder_call_mocked(monkeypatch):
     mock_model_instance = MagicMock()
     mock_model_instance.return_value = mock_output
     mock_model_instance.to.return_value = mock_model_instance
-    mock_model_cls = MagicMock(return_value=mock_model_instance)
 
     monkeypatch.setattr("sys.modules", dict(sys.modules))
     monkeypatch.setitem(sys.modules, "torch", mock_torch)

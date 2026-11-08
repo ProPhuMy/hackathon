@@ -1,5 +1,3 @@
-import pytest
-
 from src.core.geometry import Box, Track
 from src.core.shelf import shelf_diff
 
@@ -10,21 +8,6 @@ def make_item(id: int, label: str, box: Box, conf: float = 0.9) -> Track:
 
 def make_hand(id: int, box: Box, conf: float = 0.9) -> Track:
     return Track(id=id, kind="hand", box=box, conf=conf, label="hand")
-
-
-def test_box_iou_identical_and_disjoint():
-    b1 = Box(0.0, 0.0, 10.0, 10.0)
-    b2 = Box(0.0, 0.0, 10.0, 10.0)
-    b3 = Box(20.0, 20.0, 30.0, 30.0)
-
-    assert b1.iou(b2) == pytest.approx(1.0)
-    assert b1.iou(b3) == pytest.approx(0.0)
-
-
-def test_box_iou_partial_overlap():
-    b1 = Box(0.0, 0.0, 10.0, 10.0)  # area 100
-    b2 = Box(5.0, 0.0, 15.0, 10.0)  # area 100, inter 50, union 150
-    assert b1.iou(b2) == pytest.approx(50.0 / 150.0)
 
 
 def test_shelf_diff_added():

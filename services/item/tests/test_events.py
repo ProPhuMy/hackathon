@@ -1,13 +1,9 @@
 """Events this service publishes must match the schema in contracts/. Red here = breaks at integration."""
-import json
-from pathlib import Path
-
 import pytest
 from jsonschema import Draft202012Validator, ValidationError
 
+from conftest import SCHEMA
 from src.events import item_event
-
-SCHEMA = json.loads((Path(__file__).parents[3] / "contracts" / "item.event.schema.json").read_text())
 
 
 def test_event_matches_contract():

@@ -1,6 +1,48 @@
 import numpy as np
 import pytest
-from src.core.geometry import Box, DoorLine, Point, Track, held_item
+
+from src.core.geometry import Box, DoorLine, Track, held_item
+
+
+def test_geometry_box():
+    b1 = Box(0.0, 0.0, 10.0, 10.0)
+    assert b1.center() == (5.0, 5.0)
+    assert b1.area() == 100.0
+
+    b2 = Box(5.0, 5.0, 15.0, 15.0)
+    assert b1.intersection(b2) == 25.0
+
+    b3 = Box(20.0, 20.0, 30.0, 30.0)
+    assert b1.intersection(b3) == 0.0
+
+    # Inverted box coordinates should have 0 area
+    b_inv = Box(10.0, 10.0, 0.0, 0.0)
+    assert b_inv.area() == 0.0
+
+
+def test_geometry_track():
+    box = Box(1.0, 2.0, 3.0, 4.0)
+    track = Track(id=7, kind="hand", box=box, conf=0.95, label="hand")
+    assert track.id == 7
+    assert track.kind == "hand"
+    assert track.box == box
+    assert track.conf == 0.95
+    assert track.label == "hand"
+
+
+def test_box_iou_identical_and_disjoint():
+    b1 = Box(0.0, 0.0, 10.0, 10.0)
+    b2 = Box(0.0, 0.0, 10.0, 10.0)
+    b3 = Box(20.0, 20.0, 30.0, 30.0)
+
+    assert b1.iou(b2) == pytest.approx(1.0)
+    assert b1.iou(b3) == pytest.approx(0.0)
+
+
+def test_box_iou_partial_overlap():
+    b1 = Box(0.0, 0.0, 10.0, 10.0)  # area 100
+    b2 = Box(5.0, 0.0, 15.0, 10.0)  # area 100, inter 50, union 150
+    assert b1.iou(b2) == pytest.approx(50.0 / 150.0)
 
 
 def test_side_inside_outside():
@@ -187,4 +229,3 @@ def test_held_item_mask_missing_fallback():
     masks = {item2.id: mask2}
     picked = held_item(hand, [item1, item2], masks=masks)
     assert picked == item1
-
