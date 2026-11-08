@@ -281,3 +281,55 @@ baseline replay still produced 12 schema-valid named observations without openin
 a camera. Source compilation and source-distribution/wheel builds passed. No new
 camera sessions were used for this work. Runtime neural ensemble integration and
 real-world accuracy remain unverified.
+
+## Real AdaFace and MagFace encoder components
+
+`check-encoders` loads local official AdaFace IR-50 MS1MV2 and MagFace iResNet50
+checkpoints on CPU, using the same validated SCRFD five-point crop as ArcFace:
+
+```bash
+uv run fridge-person check-encoders --image models/face.jpg
+```
+
+Explicit checkpoint overrides are `--adaface` and `--magface`. Missing or
+incompatible weights fail clearly; launches never download them. Official sources:
+
+- AdaFace: https://drive.google.com/file/d/1eUaSHG4pGlIZK7hBkqjyp2fc2epKoBvI/view
+  Local name `models/adaface_ir50_ms1mv2.ckpt`, SHA-256
+  `234da6ce931f821e0a8e920063dc2091d8122ea46285c159d2f25d3f762fecb3`.
+- MagFace: https://drive.google.com/file/d/1QPNOviu_A8YDk9Rxe8hgMIXvDKzh6JMG/view
+  Local name `models/magface_iresnet50.pth`, SHA-256
+  `4e0611e0267a157bd9f6c4d034b424271515a8cac49e5f3cb98d3daf558403e7`.
+
+Code uses inference-only adaptations with pinned upstream attribution/licenses.
+The AdaFace legacy Lightning callback metadata maps to an inert placeholder;
+weights-only loading remains enabled. Arbitrary pickle globals, partial weights,
+and incompatible state dictionaries are rejected. No training framework is
+installed. License files/notices are included in package metadata; code licensing
+does not establish pretrained-weight/dataset eligibility for later reuse.
+
+AdaFace uses aligned BGR pixels scaled to [-1,1], and returns a normalized 512-D
+identity vector. The selected MagFace official `inference/gen_feat.py` uses BGR
+ToTensor [0,1] with no mean subtraction; its RAW output magnitude supplies quality.
+Do not reuse either preprocessing tensor for ArcFace, which handles its own RGB
+conversion. Do not mix ArcFace and AdaFace vector spaces. `quality_weight` implements
+the detector-confidence times clipped MagFace-quantile weighting rule; its low/high
+quantiles must be fitted on development data. No quality quantiles are fabricated.
+
+Real checkpoint smoke test on the existing local image: normalized 512-D AdaFace
+output and MagFace raw norm 29.5905. Same-crop CPU outputs matched pinned official
+networks: max AdaFace element error 6.26e-9, max MagFace element error zero. The
+canonical five-point reference agrees within 3.82e-6 pixels; this is not a claim
+that different detectors produce identical crops. Encoder-only warm timing over
+five samples after warm-up: p50 39.67 ms, p95 47.13 ms. Peak process RSS (including
+model loading and existing ONNX models) was 1,801,879,552 bytes. Checkpoint files are
+700,286,703 and 393,032,658 bytes; parameter counts are 43,585,600 and 43,590,848.
+These single-image measurements are not full-pipeline throughput or accuracy.
+
+The existing baseline's `single_face` result, model signature, gallery and policy
+are preserved. The encoder diagnostic prints aggregate metadata/norms/timing, never
+images or embedding arrays. Local model origins, hashes and preprocessing are
+recorded in ignored `models/encoder-manifest.json`. No new recordings were used.
+The full five-network runtime still needs YOLO5Face, BoT-SORT, separate AdaFace
+gallery enrollment, temporal integration, quality calibration, and compatible
+ensemble score artifacts before it can publish named ensemble events.

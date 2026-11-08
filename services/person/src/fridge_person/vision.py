@@ -24,7 +24,7 @@ class Vision:
         self.detector.prepare(ctx_id=-1, input_size=(640, 640))
         self.encoder.prepare(ctx_id=-1)
 
-    def single_face(self, image):
+    def aligned_face(self, image):
         boxes, landmarks = self.detector.detect(image, max_num=0)
         if len(boxes) != 1 or landmarks is None:
             return None
@@ -42,7 +42,14 @@ class Vision:
         # Initial usability gates, not measured quality or identity thresholds.
         if cv2.Laplacian(gray, cv2.CV_64F).var() < 10 or not 15 < gray.mean() < 240:
             return None
+        return crop, float(box[4])
+
+    def single_face(self, image):
+        aligned = self.aligned_face(image)
+        if aligned is None:
+            return None
+        crop, confidence = aligned
         vector = unit(self.encoder.get_feat(crop).reshape(-1))
         if vector.shape != (512,):
             raise ValueError('Expected 512-D ArcFace output')
-        return vector, float(box[4])
+        return vector, confidence
