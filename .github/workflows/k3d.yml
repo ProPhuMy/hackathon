@@ -50,5 +50,6 @@ jobs:
           source infra/k8s/scripts/common.sh
           kc get pods,svc,jobs -o wide || true
           kc describe pods || true
+          kc logs statefulset/redpanda --tail=100 || true
           kc logs deployment/backend --tail=200 || true
           kc logs job/topics-bootstrap || true
