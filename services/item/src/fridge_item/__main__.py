@@ -1,0 +1,460 @@
+import argparse
+import json
+from pathlib import Path
+import time
+
+import cv2
+import numpy as np
+
+from fridge_item.config import calibrate
+from fridge_item.stream import iter_frames
+
+
+def record_command(url: str, out_path: str) -> None:
+    """Record MJPEG stream or video source to an MP4 video at 15 fps."""
+    out_file = Path(out_path)
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    writer: cv2.VideoWriter | None = None
+    try:
+        for frame, _ in iter_frames(url):
+            if writer is None:
+                h, w = frame.shape[:2]
+                writer = cv2.VideoWriter(str(out_file), fourcc, 15.0, (w, h))
+            writer.write(frame)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if writer is not None:
+            writer.release()
+
+
+def calibrate_command(source: str, out_path: str) -> None:
+    """Calibrate ROI, door line, and brightness thresholds."""
+    calibrate(source, out_path)
+
+
+def probe_command(
+    clip: str,
+    out_path: str,
+    config_path: str = "config.json",
+    detector: str = "yoloe",
+) -> None:
+    """Run detector and overlay on clip without logic, writing MP4 at 15 fps."""
+    from fridge_item.config import load
+    from fridge_item.door import DoorDetector
+    from fridge_item.draw import overlay
+
+    cfg = load(config_path)
+    if detector == "gdino":
+        from fridge_item.detect import GDinoDetector
+
+        detector_model = GDinoDetector(prompts=cfg.prompts, hand_label=cfg.hand_label)
+    else:
+        from fridge_item.detect import Detector
+
+        detector_model = Detector(prompts=cfg.prompts, hand_label=cfg.hand_label)
+
+    out_file = Path(out_path)
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    writer: cv2.VideoWriter | None = None
+
+    door_detector = DoorDetector(roi=cfg.roi, on=cfg.door_on, off=cfg.door_off)
+
+    try:
+        for frame, _ in iter_frames(clip):
+            if writer is None:
+                h, w = frame.shape[:2]
+                writer = cv2.VideoWriter(str(out_file), fourcc, 15.0, (w, h))
+
+            door_open = door_detector.update(frame)
+
+            tracks = detector_model(frame)
+            annotated = overlay(frame, tracks, cfg.line, door_open, events=[])
+            writer.write(annotated)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if writer is not None:
+            writer.release()
+
+
+def run_command(
+    source: str,
+    config_path: str = "config.json",
+    gallery_path: str = "data/gallery.json",
+    broker: str = "localhost:19092",
+    dry_run: bool = False,
+    debug_video: str | None = None,
+    embed: bool = False,
+    holding: str = "box",
+    detector: str = "yoloe",
+    shelf_check: bool = False,
+) -> None:
+    """Run item recognition pipeline, printing events, publishing to Kafka, and tracking latency."""
+    from fridge_item.config import load
+    from fridge_item.draw import overlay
+    from fridge_item.gallery import ItemGallery
+    from fridge_item.pipeline import ItemPipeline
+
+    cfg = load(config_path)
+    gallery = ItemGallery(gallery_path)
+    if detector == "gdino":
+        from fridge_item.detect import GDinoDetector
+
+        detector_model = GDinoDetector(prompts=cfg.prompts, hand_label=cfg.hand_label)
+    else:
+        from fridge_item.detect import Detector
+
+        detector_model = Detector(prompts=cfg.prompts, hand_label=cfg.hand_label)
+
+    embedder = None
+    if embed:
+        from fridge_item.embed import Embedder
+
+        embedder = Embedder()
+
+    segmenter = None
+    if holding == "mask":
+        from fridge_item.segment import Segmenter
+
+        segmenter = Segmenter()
+
+    producer = None
+    if not dry_run:
+        from confluent_kafka import Producer
+
+        producer = Producer({"bootstrap.servers": broker})
+
+    detect_times: list[float] = []
+    process_times: list[float] = []
+
+    def timed_detect(frame: np.ndarray):
+        t0 = time.perf_counter()
+        tracks = detector_model(frame)
+        detect_times.append((time.perf_counter() - t0) * 1000.0)
+        return tracks
+
+    pipeline = ItemPipeline(
+        cfg=cfg,
+        detect=timed_detect,
+        gallery=gallery,
+        embed=embedder,
+        segment=segmenter,
+        shelf_check=shelf_check,
+    )
+
+    writer: cv2.VideoWriter | None = None
+    recent_events: list[dict] = []
+    if debug_video is not None:
+        out_file = Path(debug_video)
+        out_file.parent.mkdir(parents=True, exist_ok=True)
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+
+    def on_delivery(err, _msg=None):
+        if err:
+            print(f"kafka delivery failed: {err}", flush=True)
+
+    frame_idx = 0
+    try:
+        for frame, ts in iter_frames(source):
+            frame_idx += 1
+            t_start = time.perf_counter()
+            events = pipeline.process(frame, ts)
+            process_times.append((time.perf_counter() - t_start) * 1000.0)
+
+            for ev in events:
+                print(json.dumps(ev, ensure_ascii=False), flush=True)
+                if producer is not None:
+                    producer.produce(
+                        "item.event",
+                        key=ev["event_id"],
+                        value=json.dumps(ev, ensure_ascii=False),
+                        on_delivery=on_delivery,
+                    )
+                    producer.poll(0)
+                if debug_video is not None:
+                    recent_events.append(ev)
+
+            if debug_video is not None:
+                if writer is None:
+                    h, w = frame.shape[:2]
+                    writer = cv2.VideoWriter(str(out_file), fourcc, 15.0, (w, h))
+                annotated = overlay(
+                    frame,
+                    pipeline.tracks,
+                    cfg.line,
+                    pipeline.door_open,
+                    recent_events,
+                )
+                writer.write(annotated)
+
+            if frame_idx % 100 == 0:
+                det_p50 = (
+                    float(np.percentile(detect_times, 50))
+                    if detect_times
+                    else 0.0
+                )
+                det_p95 = (
+                    float(np.percentile(detect_times, 95))
+                    if detect_times
+                    else 0.0
+                )
+                proc_p50 = (
+                    float(np.percentile(process_times, 50))
+                    if process_times
+                    else 0.0
+                )
+                proc_p95 = (
+                    float(np.percentile(process_times, 95))
+                    if process_times
+                    else 0.0
+                )
+                print(
+                    f"Frame {frame_idx}: detector p50={det_p50:.1f}ms p95={det_p95:.1f}ms | "
+                    f"process p50={proc_p50:.1f}ms p95={proc_p95:.1f}ms",
+                    flush=True,
+                )
+    except KeyboardInterrupt:
+        pass
+    finally:
+        try:
+            flushed_events = pipeline.close()
+            for ev in flushed_events:
+                print(json.dumps(ev, ensure_ascii=False), flush=True)
+                if producer is not None:
+                    producer.produce(
+                        "item.event",
+                        key=ev["event_id"],
+                        value=json.dumps(ev, ensure_ascii=False),
+                        on_delivery=on_delivery,
+                    )
+                    producer.poll(0)
+        finally:
+            try:
+                if writer is not None:
+                    writer.release()
+            finally:
+                if producer is not None:
+                    remaining = producer.flush(10)
+                    if remaining:
+                        print(
+                            f"warning: kafka producer flush timed out with {remaining} messages remaining",
+                            flush=True,
+                        )
+
+
+def evaluate_command(
+    labels_path: str = "data/labels.csv",
+    clips_dir: str = "data/clips",
+    config_path: str = "config.json",
+    detector_factory=None,
+    embed: bool = False,
+    holding: str = "box",
+    detector: str = "yoloe",
+    shelf_check: bool = False,
+) -> dict[str, int]:
+    """Evaluate item recognition pipeline against labeled clips."""
+    from fridge_item.evaluate import evaluate_command as run_evaluate
+
+    if detector_factory is None:
+        if detector == "gdino":
+            from fridge_item.detect import GDinoDetector
+
+            detector_factory = GDinoDetector
+        else:
+            from fridge_item.detect import Detector
+
+            detector_factory = Detector
+
+    return run_evaluate(
+        labels_path=labels_path,
+        clips_dir=clips_dir,
+        config_path=config_path,
+        detector_factory=detector_factory,
+        embed=embed,
+        holding=holding,
+        detector=detector,
+        shelf_check=shelf_check,
+    )
+
+
+
+
+def parse_args(args: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="fridge-item", description="Fridge Tracker item-recognition service"
+    )
+    subparsers = parser.add_subparsers(dest="subcommand", required=True)
+
+    record_parser = subparsers.add_parser("record", help="Record video stream to MP4")
+    record_parser.add_argument("url", help="HTTP stream URL or video path")
+    record_parser.add_argument("out", help="Output MP4 file path")
+
+    calibrate_parser = subparsers.add_parser(
+        "calibrate", help="Calibrate fridge ROI, door line, and brightness thresholds"
+    )
+    calibrate_parser.add_argument("source", help="HTTP stream URL or video path")
+    calibrate_parser.add_argument(
+        "--out",
+        default="config.json",
+        help="Output config JSON path (default: config.json)",
+    )
+
+    probe_parser = subparsers.add_parser(
+        "probe", help="Run detector and overlay on clip"
+    )
+    probe_parser.add_argument("clip", help="Input video clip path or stream URL")
+    probe_parser.add_argument("out", help="Output overlay video MP4 path")
+    probe_parser.add_argument(
+        "--config",
+        default="config.json",
+        help="Path to config JSON (default: config.json)",
+    )
+    probe_parser.add_argument(
+        "--detector",
+        choices=["yoloe", "gdino"],
+        default="yoloe",
+        help="Detector to use: yoloe or gdino (default: yoloe)",
+    )
+
+    run_parser = subparsers.add_parser("run", help="Run item recognition pipeline")
+    run_parser.add_argument(
+        "--source", required=True, help="HTTP stream URL or video path"
+    )
+    run_parser.add_argument(
+        "--config",
+        default="config.json",
+        help="Path to config JSON (default: config.json)",
+    )
+    run_parser.add_argument(
+        "--gallery",
+        default="data/gallery.json",
+        help="Path to gallery JSON (default: data/gallery.json)",
+    )
+    run_parser.add_argument(
+        "--broker",
+        default="localhost:19092",
+        help="Kafka broker address (default: localhost:19092)",
+    )
+    run_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print events only, do not publish to Kafka",
+    )
+    run_parser.add_argument(
+        "--debug-video",
+        default=None,
+        help="Output overlay video MP4 path",
+    )
+    run_parser.add_argument(
+        "--embed",
+        action="store_true",
+        help="Use visual embeddings and Hungarian matching",
+    )
+    run_parser.add_argument(
+        "--holding",
+        choices=["box", "mask"],
+        default="box",
+        help="Holding detection method: box overlap or SAM 2 mask overlap (default: box)",
+    )
+    run_parser.add_argument(
+        "--detector",
+        choices=["yoloe", "gdino"],
+        default="yoloe",
+        help="Detector to use: yoloe or gdino (default: yoloe)",
+    )
+    run_parser.add_argument(
+        "--shelf-check",
+        action="store_true",
+        help="Enable shelf before/after second opinion",
+    )
+
+    evaluate_parser = subparsers.add_parser(
+        "evaluate", help="Evaluate item recognition pipeline against labeled clips"
+    )
+    evaluate_parser.add_argument(
+        "--labels",
+        default="data/labels.csv",
+        help="Path to labels CSV (default: data/labels.csv)",
+    )
+    evaluate_parser.add_argument(
+        "--clips",
+        default="data/clips",
+        help="Path to directory containing clips (default: data/clips)",
+    )
+    evaluate_parser.add_argument(
+        "--config",
+        default="config.json",
+        help="Path to config JSON (default: config.json)",
+    )
+    evaluate_parser.add_argument(
+        "--embed",
+        action="store_true",
+        help="Use visual embeddings and Hungarian matching",
+    )
+    evaluate_parser.add_argument(
+        "--holding",
+        choices=["box", "mask"],
+        default="box",
+        help="Holding detection method: box overlap or SAM 2 mask overlap (default: box)",
+    )
+    evaluate_parser.add_argument(
+        "--detector",
+        choices=["yoloe", "gdino"],
+        default="yoloe",
+        help="Detector to use: yoloe or gdino (default: yoloe)",
+    )
+    evaluate_parser.add_argument(
+        "--shelf-check",
+        action="store_true",
+        help="Enable shelf before/after second opinion",
+    )
+
+    return parser.parse_args(args)
+
+
+def main(args: list[str] | None = None) -> None:
+    parsed = parse_args(args)
+    if parsed.subcommand == "record":
+        record_command(parsed.url, parsed.out)
+    elif parsed.subcommand == "calibrate":
+        calibrate_command(parsed.source, parsed.out)
+    elif parsed.subcommand == "probe":
+        if parsed.detector != "yoloe":
+            probe_command(
+                clip=parsed.clip,
+                out_path=parsed.out,
+                config_path=parsed.config,
+                detector=parsed.detector,
+            )
+        else:
+            probe_command(parsed.clip, parsed.out, parsed.config)
+    elif parsed.subcommand == "run":
+        run_command(
+            source=parsed.source,
+            config_path=parsed.config,
+            gallery_path=parsed.gallery,
+            broker=parsed.broker,
+            dry_run=parsed.dry_run,
+            debug_video=parsed.debug_video,
+            embed=parsed.embed,
+            holding=parsed.holding,
+            detector=parsed.detector,
+            shelf_check=parsed.shelf_check,
+        )
+    elif parsed.subcommand == "evaluate":
+        evaluate_command(
+            labels_path=parsed.labels,
+            clips_dir=parsed.clips,
+            config_path=parsed.config,
+            embed=parsed.embed,
+            holding=parsed.holding,
+            detector=parsed.detector,
+            shelf_check=parsed.shelf_check,
+        )
+
+
+if __name__ == "__main__":
+    main()

@@ -2,8 +2,19 @@
 name = "fridge-person"
 version = "0.1.0"
 description = "Fridge Tracker person service"
+license-files = ["licenses/*.txt", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.11,<3.12"
-dependencies = []
+dependencies = [
+    "confluent-kafka>=2.16.1",
+    "ensemble-boxes==1.0.10",
+    "insightface==2.1",
+    "jsonschema==4.26.0",
+    "numpy==2.4.6",
+    "onnxruntime==1.31.1",
+    "opencv-python==5.0.0.93",
+    "scikit-learn==1.9.1",
+    "torch==2.15.0",
+]
 
 [project.scripts]
 fridge-person = "fridge_person:main"
