@@ -55,6 +55,43 @@ def check_models(args):
                       'p95_ms': float(np.percentile(latencies, 95)), 'models': artifacts}, indent=2))
 
 
+def check_camera(args):
+    """Live inference smoke check: report counts/timing without retaining biometric data."""
+    import math
+    if not math.isfinite(args.duration) or args.duration <= 0:
+        raise ValueError('Camera check duration must be finite and positive')
+    import numpy as np
+    from .capture import Capture
+    from .vision import Vision
+    vision = Vision(args.detector, args.recognizer)
+    report = dict(decoded_frames=0, usable_single_face_frames=0, stale_frames=0, reconnects=0)
+    timings = []
+    started = time.monotonic()
+    with Capture(args.source) as capture:
+        for image, received, timestamp in capture:
+            if time.monotonic() - started >= args.duration:
+                break
+            if image is None:
+                report['reconnects'] += 1
+                continue
+            report['decoded_frames'] += 1
+            if time.monotonic() - received > 1:
+                report['stale_frames'] += 1
+                continue
+            begin = time.monotonic()
+            face = vision.single_face(image)
+            timings.append((time.monotonic() - begin) * 1000)
+            report['usable_single_face_frames'] += int(face is not None)
+    report['elapsed_s'] = round(time.monotonic() - started, 2)
+    report['inference_samples'] = len(timings)
+    if timings:
+        report['median_inference_ms'] = round(float(np.percentile(timings, 50)), 2)
+        report['p95_inference_ms'] = round(float(np.percentile(timings, 95)), 2)
+    print(json.dumps(report, indent=2))
+    if not report['decoded_frames']:
+        raise ValueError('Camera check decoded no frames')
+
+
 def main():
     parser = argparse.ArgumentParser(description='Fridge person recognition: model feasibility')
     commands = parser.add_subparsers(dest='command', required=True)
@@ -88,10 +125,17 @@ def main():
         sub.add_argument('--gallery', type=Path, default=Path('models/gallery.json'))
         if command == 'evaluate':
             sub.add_argument('--policy', type=Path, required=True)
+    live = commands.add_parser('check-camera', help='Live model smoke check; no enrollment or retained frames')
+    live.add_argument('--source', default='0')
+    live.add_argument('--duration', type=float, default=15.)
+    live.add_argument('--detector', type=Path, default=Path('models/det_10g.onnx'))
+    live.add_argument('--recognizer', type=Path, default=Path('models/w600k_r50.onnx'))
     args = parser.parse_args()
     try:
         if args.command == 'check-models':
             check_models(args)
+        elif args.command == 'check-camera':
+            check_camera(args)
         elif args.command in ('calibrate', 'evaluate'):
             from .dataset import execute
             execute(args)

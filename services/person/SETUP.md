@@ -138,3 +138,22 @@ a manifest. Webcam 0 was attempted without saving images; macOS denied camera
 access. Live capture could not be verified. Grant camera access to the host app
 in System Settings > Privacy & Security > Camera, or provide a reachable phone
 MJPEG URL. No camera permission settings were changed by the service.
+
+
+## Live camera/model check
+
+Run from a camera-authorized Terminal (the agent's subprocess may have separate
+macOS camera permissions):
+
+```bash
+.venv/bin/fridge-person check-camera --source 0 --duration 15
+```
+
+The command reports aggregate decoded/usable/stale-frame counts, reconnects and
+inference timing. It never names or enrolls participants and does not retain
+frames or vectors. Keep optional redirected reports under ignored `models/`.
+On 2026-11-07, the CLI decoded 297 frames in 16.03 seconds (including startup and
+shutdown), with 78 usable single-face frames, no stale frames or reconnects,
+median inference 36.82 ms and p95 72.04 ms. These measure this scene and CPU host
+only, not recognition accuracy, camera exposure-to-event latency, or performance
+with the item pipeline running. All 43 automated tests passed.
