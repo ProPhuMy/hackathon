@@ -57,7 +57,9 @@ class Detector:
         self,
         prompts: list[str],
         hand_label: str = "hand",
-        weights: str = "models/yoloe-11s-seg.pt",
+        # YOLOE-26l: on our iPhone top-down clips it was the only size that found a small grape bunch,
+        # and it caught bottles/hands 2-4x more often than YOLOE-11s (see RESULTS.md, 2026-11-08).
+        weights: str = "models/yoloe-26l-seg.pt",
     ) -> None:
         # Import ultralytics inside __init__ so importing detect.py stays fast for unit tests.
         from ultralytics import YOLOE
