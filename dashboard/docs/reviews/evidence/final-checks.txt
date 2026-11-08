@@ -1,0 +1,37 @@
+$ npm run build
+
+> dashboard@0.0.0 build
+> vite build
+
+vite v8.3.6 building client environment for production...
+transforming...
+✓ 658 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                            0.67 kB │ gzip:   0.40 kB
+dist/assets/fridge-pixel-6KZKqwRR.ttf      6.49 kB
+dist/assets/index-CewQJGMN.css            14.86 kB │ gzip:   4.30 kB
+dist/assets/index-EitmWZnA.js            312.10 kB │ gzip: 100.46 kB
+dist/assets/Fridge3D-BGYqXbrK.js       1,047.77 kB │ gzip: 283.96 kB
+
+✓ built in 253ms
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+
+$ npm run lint
+
+> dashboard@0.0.0 lint
+> oxlint
+
+
+$ node tools/checks/fridge-motion.mjs
+PASS: reversible camera path, reduced motion, door clearance, 5 aspect ratios × 3 shelves, 53 model nodes and 6 selectable food groups
+
+$ node tools/checks/routes.mjs
+Passed: 7 direct route loads, including item and event deep links
+
+$ node tools/checks/mapping.mjs
+✅ Mapping tests passed.

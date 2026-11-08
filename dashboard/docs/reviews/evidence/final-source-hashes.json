@@ -1,0 +1,13 @@
+{
+  "src/App.jsx": "d09e077baa7af6cf54bd6a770222cc577b572741a64930bf1d055bbab602d31a",
+  "src/App.css": "6b4eb574245b06ae0e7be21b9a8a921db61aba7c2c3dbb1e9070f8a974d92f35",
+  "src/Fridge3D.jsx": "3235f431b5b319b024340b68c596ab821f05567b8e0a01d0a264c6e3dc939f6b",
+  "src/fridgeMotion.mjs": "15c2ea0919a945cc4ee8ffdeaea6e736a2c2efeaab53c2950ab571fc84e44740",
+  "src/itemMapping.js": "e6904f1facad1c1dd67f49b86fd86b7810f8247dea744d963cda265a0873159d",
+  "tools/checks/fridge-motion.mjs": "eaf6be7709da2a21ff206db0d7f04c2b721c41b689f5421a945144cef431cfe8",
+  "tools/checks/routes.mjs": "85c16d7f6baa49443bff1dfd489e3405946e51c09f17597cc4d3346337780f24",
+  "tools/checks/mapping.mjs": "30efc5ff91495eca36d4cb91b5676990b0f19d9c1d2151ced96b206231c69970",
+  "tools/blender/remodel_via_mcp.py": "2d63fe51b8c333b13bd35e84dd97a3f712c87459b514e29685aeeb8ec2bec830",
+  "public/models/mini-fridge.glb": "6f339e1bf69e38bb59a154b935bd5945edd61ae4c042308f8996f0d8879ad9c4",
+  "tools/blender/mini-fridge.blend": "fa7ed14f86038f6f28e520224ce3f17da8ee51a6b1b6cd0c28f3aac875a4a932"
+}

@@ -1,0 +1,44 @@
+[
+  {
+    "shelf": "Top shelf",
+    "x": 250,
+    "y": 450,
+    "expected": "043",
+    "url": "http://127.0.0.1:5176/items/043"
+  },
+  {
+    "shelf": "Top shelf",
+    "x": 1050,
+    "y": 600,
+    "expected": "044",
+    "url": "http://127.0.0.1:5176/items/044"
+  },
+  {
+    "shelf": "Middle shelf",
+    "x": 220,
+    "y": 620,
+    "expected": "045",
+    "url": "http://127.0.0.1:5176/items/045"
+  },
+  {
+    "shelf": "Middle shelf",
+    "x": 1070,
+    "y": 550,
+    "expected": "046",
+    "url": "http://127.0.0.1:5176/items/046"
+  },
+  {
+    "shelf": "Lower shelf",
+    "x": 220,
+    "y": 560,
+    "expected": "047",
+    "url": "http://127.0.0.1:5176/items/047"
+  },
+  {
+    "shelf": "Lower shelf",
+    "x": 1100,
+    "y": 500,
+    "expected": "048",
+    "url": "http://127.0.0.1:5176/items/048"
+  }
+]

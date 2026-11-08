@@ -1,0 +1,22 @@
+[
+  {
+    "command": "npm run build",
+    "exitCode": 0
+  },
+  {
+    "command": "npm run lint",
+    "exitCode": 0
+  },
+  {
+    "command": "node tools/checks/fridge-motion.mjs",
+    "exitCode": 0
+  },
+  {
+    "command": "node tools/checks/routes.mjs",
+    "exitCode": 0
+  },
+  {
+    "command": "node tools/checks/mapping.mjs",
+    "exitCode": 0
+  }
+]

@@ -1,0 +1,24 @@
+{
+  "browser": "156.0.8078.81",
+  "viewport": "1440x900",
+  "mode": "local Chrome headless; Vite dev; fresh browser context; warm OS cache; not target-device certification",
+  "readyMs": 924,
+  "gpuMemory": "unavailable",
+  "exterior": {
+    "rafFps": 60.003000150007495,
+    "p95FrameMs": 16.700000000000273,
+    "meanDrawCallsPerFrame": 93
+  },
+  "inside": {
+    "rafFps": 60.00300015000751,
+    "p95FrameMs": 16.700000000000728,
+    "meanDrawCallsPerFrame": 71
+  },
+  "glb": [
+    {
+      "durationMs": 27.799999997019768,
+      "transferSize": 6620340,
+      "decodedBodySize": 6620040
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest", "--headless", "--isolated"]
+    },
+    "chrome-devtools": {
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@latest", "--headless", "--isolated"]
+    },
+    "blender": {
+      "command": "uvx",
+      "args": ["mcp-for-blender"]
+    },
+    "figma-desktop": {
+      "serverUrl": "http://127.0.0.1:3845/mcp",
+      "disabled": true
+    }
+  }
+}

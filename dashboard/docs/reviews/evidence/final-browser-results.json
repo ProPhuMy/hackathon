@@ -1,0 +1,97 @@
+{
+  "browser": "156.0.8078.81",
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900,
+      "exterior": {
+        "navigationOverlapsIntro": false,
+        "scrollWidth": 1440,
+        "viewportWidth": 1440
+      },
+      "controls": {
+        "exitOverlapsHeading": false,
+        "shelfTargetHeights": [
+          37,
+          37,
+          37
+        ],
+        "groupsOverlap": false
+      },
+      "accessibleItems": 6,
+      "touchContext": false
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "exterior": {
+        "navigationOverlapsIntro": false,
+        "scrollWidth": 390,
+        "viewportWidth": 390
+      },
+      "controls": {
+        "exitOverlapsHeading": false,
+        "shelfTargetHeights": [
+          44,
+          44,
+          44
+        ],
+        "groupsOverlap": false
+      },
+      "accessibleItems": 6,
+      "touchContext": true
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "exterior": {
+        "navigationOverlapsIntro": false,
+        "scrollWidth": 320,
+        "viewportWidth": 320
+      },
+      "controls": {
+        "exitOverlapsHeading": false,
+        "shelfTargetHeights": [
+          44,
+          44,
+          44
+        ],
+        "groupsOverlap": false
+      },
+      "accessibleItems": 6,
+      "touchContext": true
+    },
+    {
+      "width": 844,
+      "height": 390,
+      "exterior": {
+        "navigationOverlapsIntro": false,
+        "scrollWidth": 844,
+        "viewportWidth": 844
+      },
+      "controls": {
+        "exitOverlapsHeading": false,
+        "shelfTargetHeights": [
+          44,
+          44,
+          44
+        ],
+        "groupsOverlap": false
+      },
+      "accessibleItems": 6,
+      "touchContext": true
+    }
+  ],
+  "errors": [],
+  "routes": [
+    "/",
+    "/inventory",
+    "/history",
+    "/alerts",
+    "/people",
+    "/items/043",
+    "/events/0934"
+  ],
+  "backForward": true,
+  "interruptedEntry": true
+}
