@@ -7,7 +7,7 @@ from src.core.geometry import Box, DoorLine, Track
 from src.vision.detect import Detector, to_tracks
 from src.vision.gdino import GDinoDetector, phrase_to_class, tracker_output_to_tracks
 from src.draw import overlay
-from src.__main__ import evaluate_command, parse_args, probe_command
+from src.cli import evaluate_command, parse_args, probe_command
 
 
 def test_drops_rows_without_id():
@@ -196,10 +196,12 @@ def test_probe_parser():
 
 
 def test_probe_main_dispatch():
-    from src.__main__ import main
-    with patch("src.__main__.probe_command") as mock_probe:
+    from src.cli import main
+    with patch("src.cli.probe_command") as mock_probe:
         main(["probe", "in.mp4", "out.mp4", "--config", "conf.json"])
-        mock_probe.assert_called_once_with("in.mp4", "out.mp4", "conf.json")
+        mock_probe.assert_called_once_with(
+            clip="in.mp4", out_path="out.mp4", config_path="conf.json", detector="yoloe"
+        )
 
 
 def test_probe_command_flow(tmp_path: Path):
@@ -223,9 +225,9 @@ def test_probe_command_flow(tmp_path: Path):
     ]
     mock_writer = MagicMock()
 
-    with patch("src.config.load", return_value=cfg), \
+    with patch("src.cli.probe.load", return_value=cfg), \
          patch("src.vision.detect.Detector", return_value=mock_detector), \
-         patch("src.__main__.iter_frames", return_value=iter(frames)), \
+         patch("src.cli.probe.iter_frames", return_value=iter(frames)), \
          patch("cv2.VideoWriter", return_value=mock_writer):
         probe_command("test_clip.mp4", str(out_video), config_path="dummy.json")
 
@@ -315,9 +317,9 @@ def test_probe_command_selects_gdino(tmp_path: Path):
     mock_gdino.return_value = []
     mock_writer = MagicMock()
 
-    with patch("src.config.load", return_value=cfg), \
+    with patch("src.cli.probe.load", return_value=cfg), \
          patch("src.vision.gdino.GDinoDetector", return_value=mock_gdino) as mock_gdino_cls, \
-         patch("src.__main__.iter_frames", return_value=iter(frames)), \
+         patch("src.cli.probe.iter_frames", return_value=iter(frames)), \
          patch("cv2.VideoWriter", return_value=mock_writer):
         probe_command("clip.mp4", str(tmp_path / "out.mp4"), detector="gdino")
 
@@ -346,7 +348,7 @@ def test_evaluate_command_selects_gdino(tmp_path: Path, monkeypatch):
         ),
         cfg_file,
     )
-    monkeypatch.setattr("src.stream.iter_frames", lambda src: iter([]))
+    monkeypatch.setattr("src.cli.evaluate.iter_frames", lambda src: iter([]))
     mock_gdino = MagicMock()
     mock_gdino.return_value = []
     mock_factory = MagicMock(return_value=mock_gdino)
@@ -364,7 +366,7 @@ def test_evaluate_command_selects_gdino(tmp_path: Path, monkeypatch):
 
 def test_run_command_selects_gdino(tmp_path: Path, monkeypatch):
     from src.config import Config, save
-    from src.__main__ import run_command
+    from src.cli import run_command
 
     cfg_file = tmp_path / "config.json"
     save(
@@ -378,7 +380,7 @@ def test_run_command_selects_gdino(tmp_path: Path, monkeypatch):
         ),
         cfg_file,
     )
-    monkeypatch.setattr("src.stream.iter_frames", lambda src: iter([]))
+    monkeypatch.setattr("src.cli.run.iter_frames", lambda src: iter([]))
     mock_gdino = MagicMock()
     mock_gdino_cls = MagicMock(return_value=mock_gdino)
 

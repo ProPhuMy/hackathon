@@ -1,6 +1,1 @@
-def main() -> None:
-    from .__main__ import main as _main
-    _main()
-
-
-__all__ = ["main"]
+"""Fridge Tracker item-recognition service. Entry point: `python -m src` (see cli/)."""

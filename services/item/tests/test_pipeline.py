@@ -366,7 +366,7 @@ def test_take_put_take_ordering_resolves_put_first(tmp_path: Path):
 
 
 def test_cli_parse_args():
-    from src.__main__ import parse_args
+    from src.cli import parse_args
 
     args = parse_args(["run", "--source", "test.mp4", "--dry-run"])
     assert args.subcommand == "run"
@@ -417,7 +417,7 @@ def test_cli_parse_args():
 
 
 def test_cli_run_command_with_holding_mask(tmp_path: Path, monkeypatch, capsys):
-    from src.__main__ import run_command
+    from src.cli import run_command
     from src.config import Config, save
     from src.events import item_event
 
@@ -444,7 +444,7 @@ def test_cli_run_command_with_holding_mask(tmp_path: Path, monkeypatch, capsys):
 
     monkeypatch.setattr("src.vision.detect.Detector", MagicMock())
     monkeypatch.setattr(
-        "src.__main__.iter_frames",
+        "src.cli.run.iter_frames",
         lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
     )
     monkeypatch.setattr(
@@ -467,7 +467,7 @@ def test_cli_run_command_with_holding_mask(tmp_path: Path, monkeypatch, capsys):
 
 
 def test_cli_run_command_with_embed(tmp_path: Path, monkeypatch, capsys):
-    from src.__main__ import run_command
+    from src.cli import run_command
     from src.config import Config, save
     from src.events import item_event
 
@@ -484,7 +484,7 @@ def test_cli_run_command_with_embed(tmp_path: Path, monkeypatch, capsys):
 
     monkeypatch.setattr("src.vision.detect.Detector", MagicMock())
     monkeypatch.setattr(
-        "src.__main__.iter_frames",
+        "src.cli.run.iter_frames",
         lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
     )
     monkeypatch.setattr(
@@ -505,7 +505,7 @@ def test_cli_run_command_with_embed(tmp_path: Path, monkeypatch, capsys):
 
 
 def test_cli_run_command_dry_run(tmp_path: Path, monkeypatch, capsys):
-    from src.__main__ import run_command
+    from src.cli import run_command
     from src.config import Config, save
     from src.events import item_event
 
@@ -518,7 +518,7 @@ def test_cli_run_command_dry_run(tmp_path: Path, monkeypatch, capsys):
 
     monkeypatch.setattr("src.vision.detect.Detector", MagicMock())
     monkeypatch.setattr(
-        "src.__main__.iter_frames",
+        "src.cli.run.iter_frames",
         lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
     )
     monkeypatch.setattr(
@@ -540,7 +540,7 @@ def test_cli_run_command_dry_run(tmp_path: Path, monkeypatch, capsys):
 def test_cli_run_command_kafka_publish(tmp_path: Path, monkeypatch):
     import sys
     from unittest.mock import MagicMock
-    from src.__main__ import run_command
+    from src.cli import run_command
     from src.config import Config, save
     from src.events import item_event
 
@@ -553,7 +553,7 @@ def test_cli_run_command_kafka_publish(tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr("src.vision.detect.Detector", MagicMock())
     monkeypatch.setattr(
-        "src.__main__.iter_frames",
+        "src.cli.run.iter_frames",
         lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
     )
     monkeypatch.setattr(
@@ -589,7 +589,7 @@ def test_cli_run_command_kafka_publish(tmp_path: Path, monkeypatch):
 
 
 def test_cli_run_command_debug_video(tmp_path: Path, monkeypatch):
-    from src.__main__ import run_command
+    from src.cli import run_command
     from src.config import Config, save
 
     cfg_file = tmp_path / "cfg.json"
@@ -599,7 +599,7 @@ def test_cli_run_command_debug_video(tmp_path: Path, monkeypatch):
     frame = np.full((100, 100, 3), 10, dtype=np.uint8)
     monkeypatch.setattr("src.vision.detect.Detector", MagicMock())
     monkeypatch.setattr(
-        "src.__main__.iter_frames",
+        "src.cli.run.iter_frames",
         lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
     )
     monkeypatch.setattr(
@@ -624,7 +624,7 @@ def test_cli_run_command_debug_video(tmp_path: Path, monkeypatch):
 
 
 def test_cli_run_latency_print(tmp_path: Path, monkeypatch, capsys):
-    from src.__main__ import run_command
+    from src.cli import run_command
     from src.config import Config, save
 
     cfg_file = tmp_path / "cfg.json"
@@ -634,7 +634,7 @@ def test_cli_run_latency_print(tmp_path: Path, monkeypatch, capsys):
     frame = np.full((50, 50, 3), 10, dtype=np.uint8)
     frames = [(frame, f"2026-11-07T20:00:{i:02d}.000Z") for i in range(100)]
     monkeypatch.setattr("src.vision.detect.Detector", MagicMock())
-    monkeypatch.setattr("src.__main__.iter_frames", lambda src: iter(frames))
+    monkeypatch.setattr("src.cli.run.iter_frames", lambda src: iter(frames))
     monkeypatch.setattr("src.core.pipeline.ItemPipeline.process", lambda self, f, ts: [])
 
     run_command(
@@ -726,7 +726,7 @@ def test_pipeline_segment_called_only_when_door_open(tmp_path: Path):
 
 
 def test_cli_run_command_flushes_on_shutdown(tmp_path: Path, monkeypatch, capsys):
-    from src.__main__ import run_command
+    from src.cli import run_command
     from src.config import Config, save
 
     cfg_file = tmp_path / "cfg.json"
@@ -745,7 +745,7 @@ def test_cli_run_command_flushes_on_shutdown(tmp_path: Path, monkeypatch, capsys
         (bright_frame, "2026-11-07T20:00:01.000Z"),
         (bright_frame, "2026-11-07T20:00:02.000Z"),
     ]
-    monkeypatch.setattr("src.__main__.iter_frames", lambda src: iter(frames))
+    monkeypatch.setattr("src.cli.run.iter_frames", lambda src: iter(frames))
 
     run_command(
         source="dummy_src",
@@ -764,7 +764,7 @@ def test_cli_run_command_flushes_on_shutdown(tmp_path: Path, monkeypatch, capsys
 def test_shutdown_cleanup_on_flush_error(tmp_path: Path, monkeypatch):
     import sys
     from unittest.mock import MagicMock
-    from src.__main__ import run_command
+    from src.cli import run_command
     from src.config import Config, save
     from src.events import item_event
 
@@ -775,7 +775,7 @@ def test_shutdown_cleanup_on_flush_error(tmp_path: Path, monkeypatch):
     frame = np.full((100, 100, 3), 10, dtype=np.uint8)
     monkeypatch.setattr("src.vision.detect.Detector", MagicMock())
     monkeypatch.setattr(
-        "src.__main__.iter_frames",
+        "src.cli.run.iter_frames",
         lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
     )
 
@@ -818,7 +818,7 @@ def test_shutdown_cleanup_on_flush_error(tmp_path: Path, monkeypatch):
 def test_shutdown_order_and_flush_warning_and_delivery_callback(tmp_path: Path, monkeypatch, capsys):
     import sys
     from unittest.mock import MagicMock
-    from src.__main__ import run_command
+    from src.cli import run_command
     from src.config import Config, save
     from src.events import item_event
 
@@ -829,7 +829,7 @@ def test_shutdown_order_and_flush_warning_and_delivery_callback(tmp_path: Path, 
     frame = np.full((100, 100, 3), 10, dtype=np.uint8)
     monkeypatch.setattr("src.vision.detect.Detector", MagicMock())
     monkeypatch.setattr(
-        "src.__main__.iter_frames",
+        "src.cli.run.iter_frames",
         lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
     )
 
@@ -1047,7 +1047,7 @@ def test_pipeline_shelf_check_take_fallback_last_open_ts(tmp_path: Path):
 
 
 def test_cli_shelf_check_flags():
-    from src.__main__ import parse_args
+    from src.cli import parse_args
 
     args_run = parse_args(["run", "--source", "vid.mp4", "--shelf-check"])
     assert args_run.shelf_check is True

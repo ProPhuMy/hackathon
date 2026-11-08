@@ -1,3 +1,6 @@
+"""Debug-video output: overlay of tracks, door line, door state and recent events."""
+from pathlib import Path
+
 import cv2
 import numpy as np
 
@@ -87,3 +90,9 @@ def overlay(
         y_ev += 25
 
     return display
+
+
+def video_writer(path: str | Path, frame: np.ndarray) -> cv2.VideoWriter:
+    """MP4 writer at 15 fps sized to `frame` (the first frame of the stream)."""
+    h, w = frame.shape[:2]
+    return cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), 15.0, (w, h))

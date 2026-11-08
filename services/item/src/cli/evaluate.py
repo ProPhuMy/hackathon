@@ -1,3 +1,4 @@
+"""`evaluate` command: replay labeled clips through the pipeline and score PUT/TAKE events."""
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
@@ -6,6 +7,12 @@ from collections import Counter
 from pathlib import Path
 import tempfile
 from typing import Any
+
+from ..config import load
+from ..core.gallery import ItemGallery
+from ..core.pipeline import ItemPipeline
+from ..stream import iter_frames
+from ..vision import detector_class, optional_models
 
 
 def score(
@@ -57,11 +64,6 @@ def evaluate_command(
     shelf_check: bool = False,
 ) -> dict[str, int]:
     """Run ItemPipeline over labeled clips with a fresh temporary gallery and detector per clip."""
-    from .config import load
-    from .core.gallery import ItemGallery
-    from .core.pipeline import ItemPipeline
-    from .stream import iter_frames
-
     expected_by_clip = load_labels(labels_path)
     if not expected_by_clip:
         print("total: correct=0 missed=0 extra=0 accuracy=0.0", flush=True)
@@ -69,26 +71,8 @@ def evaluate_command(
 
     cfg = load(config_path)
     if detector_factory is None:
-        if detector == "gdino":
-            from .vision.gdino import GDinoDetector
-
-            detector_factory = GDinoDetector
-        else:
-            from .vision.detect import Detector
-
-            detector_factory = Detector
-
-    embedder = None
-    if embed:
-        from .vision.embed import Embedder
-
-        embedder = Embedder()
-
-    segmenter = None
-    if holding == "mask":
-        from .vision.segment import Segmenter
-
-        segmenter = Segmenter()
+        detector_factory = detector_class(detector)
+    embedder, segmenter = optional_models(embed, holding)
 
     total_correct = 0
     total_missed = 0
@@ -99,13 +83,13 @@ def evaluate_command(
         if not clip_path.is_file():
             raise FileNotFoundError(f"Clip not found: {clip_path}")
 
-        detector = detector_factory(cfg.prompts, cfg.hand_label)
+        detect = detector_factory(cfg.prompts, cfg.hand_label)
         got_events: list[tuple[str, str]] = []
         with tempfile.TemporaryDirectory() as tmp_dir:
             gallery = ItemGallery(str(Path(tmp_dir) / "gallery.json"))
             pipeline = ItemPipeline(
                 cfg=cfg,
-                detect=detector,
+                detect=detect,
                 gallery=gallery,
                 embed=embedder,
                 segment=segmenter,

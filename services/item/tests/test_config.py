@@ -4,9 +4,10 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from src.config import Config, DEFAULT_PROMPTS, load, save, calibrate
+from src.config import Config, DEFAULT_PROMPTS, load, save
+from src.cli.calibrate import calibrate_command
 from src.core.geometry import Box, DoorLine, Track
-from src.__main__ import parse_args
+from src.cli import parse_args
 
 
 def test_config_roundtrip(tmp_path: Path):
@@ -86,21 +87,21 @@ def test_calibrate_parser():
 
 
 def test_calibrate_main_dispatch():
-    from src.__main__ import main
-    with patch("src.__main__.calibrate") as mock_cal:
+    from src.cli import main
+    with patch("src.cli.calibrate_command") as mock_cal:
         main(["calibrate", "http://camera/stream", "--out", "out.json"])
         mock_cal.assert_called_once_with("http://camera/stream", "out.json")
 
 
 def test_calibrate_empty_stream():
-    with patch("src.config.iter_frames", return_value=iter([])):
+    with patch("src.cli.calibrate.iter_frames", return_value=iter([])):
         with pytest.raises(ValueError, match="No frames available"):
-            calibrate("empty_source")
+            calibrate_command("empty_source")
 
 
 def test_calibrate_aborted_points():
     dummy_frame = np.full((50, 50, 3), 10, dtype=np.uint8)
-    with patch("src.config.iter_frames", return_value=iter([(dummy_frame, "ts")])), \
+    with patch("src.cli.calibrate.iter_frames", return_value=iter([(dummy_frame, "ts")])), \
          patch("cv2.selectROI", return_value=(0, 0, 10, 10)), \
          patch("cv2.namedWindow"), \
          patch("cv2.imshow"), \
@@ -108,7 +109,7 @@ def test_calibrate_aborted_points():
          patch("cv2.setMouseCallback"), \
          patch("cv2.waitKey", return_value=27):  # ESC key
         with pytest.raises(RuntimeError, match="Calibration aborted"):
-            calibrate("source")
+            calibrate_command("source")
 
 
 def test_load_default_margin_and_prompts(tmp_path: Path):
@@ -132,7 +133,7 @@ def test_calibrate_invalid_roi_raises(tmp_path: Path):
     out_file = tmp_path / "config.json"
     dummy_frame = np.full((100, 100, 3), 40, dtype=np.uint8)
 
-    with patch("src.config.iter_frames", return_value=iter([(dummy_frame, "ts")])), \
+    with patch("src.cli.calibrate.iter_frames", return_value=iter([(dummy_frame, "ts")])), \
          patch("cv2.selectROI", return_value=(0, 0, 0, 0)), \
          patch("cv2.namedWindow"), \
          patch("cv2.imshow"), \
@@ -140,7 +141,7 @@ def test_calibrate_invalid_roi_raises(tmp_path: Path):
          patch("cv2.setMouseCallback"), \
          patch("cv2.waitKey", return_value=27):
         with pytest.raises(ValueError, match="width and height must be positive"):
-            calibrate("dummy_source", out_file)
+            calibrate_command("dummy_source", out_file)
 
     assert not out_file.exists()
 
@@ -165,7 +166,7 @@ def test_calibrate_one_frame_source_exhaustion_on_open(tmp_path: Path):
             cb(cv2.EVENT_LBUTTONDOWN, 50, 70, 0, None)
         return 13
 
-    with patch("src.config.iter_frames", return_value=iter(frames)), \
+    with patch("src.cli.calibrate.iter_frames", return_value=iter(frames)), \
          patch("cv2.selectROI", return_value=(10, 20, 30, 40)), \
          patch("cv2.namedWindow"), \
          patch("cv2.imshow"), \
@@ -174,7 +175,7 @@ def test_calibrate_one_frame_source_exhaustion_on_open(tmp_path: Path):
          patch("cv2.setMouseCallback", side_effect=fake_set_mouse_callback), \
          patch("cv2.waitKey", side_effect=fake_wait_key):
         with pytest.raises(ValueError, match="exhausted"):
-            calibrate("dummy_source", out_file)
+            calibrate_command("dummy_source", out_file)
 
     assert not out_file.exists()
 
@@ -208,7 +209,7 @@ def test_calibrate_logic(tmp_path: Path):
             cb(cv2.EVENT_LBUTTONDOWN, 50, 70, 0, None)
         return 13
 
-    with patch("src.config.iter_frames", return_value=iter(frames)), \
+    with patch("src.cli.calibrate.iter_frames", return_value=iter(frames)), \
          patch("cv2.selectROI", return_value=(10, 20, 30, 40)), \
          patch("cv2.namedWindow"), \
          patch("cv2.imshow"), \
@@ -217,7 +218,7 @@ def test_calibrate_logic(tmp_path: Path):
          patch("cv2.setMouseCallback", side_effect=fake_set_mouse_callback), \
          patch("cv2.waitKey", side_effect=fake_wait_key):
 
-        cfg = calibrate("dummy_source", out_file)
+        cfg = calibrate_command("dummy_source", out_file)
 
     assert out_file.exists()
     assert cfg.roi == (10, 20, 30, 40)
@@ -256,7 +257,7 @@ def test_calibrate_insufficient_brightness_diff_raises(tmp_path: Path):
             cb(cv2.EVENT_LBUTTONDOWN, 50, 70, 0, None)
         return 13
 
-    with patch("src.config.iter_frames", return_value=iter(frames)), \
+    with patch("src.cli.calibrate.iter_frames", return_value=iter(frames)), \
          patch("cv2.selectROI", return_value=(10, 20, 30, 40)), \
          patch("cv2.namedWindow"), \
          patch("cv2.imshow"), \
@@ -266,6 +267,6 @@ def test_calibrate_insufficient_brightness_diff_raises(tmp_path: Path):
          patch("cv2.waitKey", side_effect=fake_wait_key):
 
         with pytest.raises(ValueError, match="brighter"):
-            calibrate("dummy_source", out_file)
+            calibrate_command("dummy_source", out_file)
 
     assert not out_file.exists()

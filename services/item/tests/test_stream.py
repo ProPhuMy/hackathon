@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from src.stream import LatestFrameReader, iter_frames, split_jpegs
-from src.__main__ import parse_args, record_command
+from src.cli import parse_args, record_command
 
 
 def test_split_two_frames():
@@ -88,7 +88,7 @@ def test_record_command(tmp_path):
     frame_mock = np.zeros((40, 40, 3), dtype=np.uint8)
 
     with patch(
-        "src.__main__.iter_frames",
+        "src.cli.record.iter_frames",
         return_value=[
             (frame_mock, "2026-11-07T19:40:00.000Z"),
             (frame_mock, "2026-11-07T19:40:00.066Z"),

@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.config import Config, save
-from src.evaluate import evaluate_command, score
+from src.cli.evaluate import evaluate_command, score
 from src.core.geometry import DoorLine
 
 
@@ -71,7 +71,7 @@ def test_evaluate_fresh_detector_per_clip(tmp_path: Path, monkeypatch):
         cfg_file,
     )
 
-    monkeypatch.setattr("src.stream.iter_frames", lambda src: iter([]))
+    monkeypatch.setattr("src.cli.evaluate.iter_frames", lambda src: iter([]))
 
     created_detectors = []
 
@@ -143,7 +143,7 @@ def test_evaluate_with_embed_instantiates_embedder_once(tmp_path: Path, monkeypa
         cfg_file,
     )
 
-    monkeypatch.setattr("src.stream.iter_frames", lambda src: iter([]))
+    monkeypatch.setattr("src.cli.evaluate.iter_frames", lambda src: iter([]))
     mock_embedder_instance = MagicMock()
     mock_embedder_cls = MagicMock(return_value=mock_embedder_instance)
     monkeypatch.setattr("src.vision.embed.Embedder", mock_embedder_cls)
@@ -196,7 +196,7 @@ def test_evaluate_with_holding_mask_instantiates_segmenter_once(tmp_path: Path, 
         cfg_file,
     )
 
-    monkeypatch.setattr("src.stream.iter_frames", lambda src: iter([]))
+    monkeypatch.setattr("src.cli.evaluate.iter_frames", lambda src: iter([]))
     mock_segmenter_instance = MagicMock()
     mock_segmenter_cls = MagicMock(return_value=mock_segmenter_instance)
     monkeypatch.setattr("src.vision.segment.Segmenter", mock_segmenter_cls)
