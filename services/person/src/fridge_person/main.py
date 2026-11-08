@@ -20,13 +20,22 @@ def check_models(args):
     image = cv2.imread(str(args.image))
     if image is None:
         raise ValueError('Cannot decode the supplied image')
-    # CPU is the documented Mac correctness baseline, independent of CoreML availability.
-    detector = get_model(str(args.detector), providers=['CPUExecutionProvider'])
-    recognizer = get_model(str(args.recognizer), providers=['CPUExecutionProvider'])
+    try:
+        detector = get_model(str(args.detector), providers=['CPUExecutionProvider'])
+        recognizer = get_model(str(args.recognizer), providers=['CPUExecutionProvider'])
+    except Exception as error:
+        raise ValueError(f"Failed to load ONNX model: {error}") from error
     if detector is None or recognizer is None:
         raise ValueError('Unsupported ONNX model; supply SCRFD and ArcFace models')
-    detector.prepare(ctx_id=-1, input_size=(640, 640))
-    recognizer.prepare(ctx_id=-1)
+    if not hasattr(detector, 'detect') or getattr(detector, 'taskname', 'detection') != 'detection':
+        raise ValueError('Unsupported detector model; supply an SCRFD model')
+    if not hasattr(recognizer, 'get_feat'):
+        raise ValueError('Unsupported recognizer model; supply an ArcFace model')
+    try:
+        detector.prepare(ctx_id=-1, input_size=(640, 640))
+        recognizer.prepare(ctx_id=-1)
+    except Exception as error:
+        raise ValueError(f"Failed to initialize model: {error}") from error
     latencies = []
     for iteration in range(6):
         start = time.perf_counter()
@@ -131,6 +140,122 @@ def check_encoders(args):
     print(json.dumps(report,indent=2))
 
 
+def check_detectors(args):
+    import cv2
+    import numpy as np
+    import onnxruntime as ort
+    from insightface.model_zoo import get_model
+    from .detection import FaceDetection, _iou, fuse_faces, _valid_points
+    from .yolo5face import YOLO5Face
+
+    scrfd_path = args.scrfd or args.detector
+    for path, name in ((args.image, 'image'), (scrfd_path, 'SCRFD model'), (args.yolo5face, 'YOLO5Face model')):
+        if not path.is_file():
+            raise ValueError(f"Missing local file: {path}. See SETUP.md; weights are never downloaded automatically.")
+
+    image = cv2.imread(str(args.image))
+    if image is None:
+        raise ValueError('Cannot decode the supplied image')
+
+    try:
+        scrfd = get_model(str(scrfd_path), providers=['CPUExecutionProvider'])
+    except Exception as error:
+        raise ValueError(f"Failed to load SCRFD model from {scrfd_path}: {error}") from error
+    if scrfd is None or not hasattr(scrfd, 'detect') or getattr(scrfd, 'taskname', 'detection') != 'detection':
+        raise ValueError(f"Incompatible SCRFD model: {scrfd_path} is not a face detection model. Provide an SCRFD checkpoint.")
+    try:
+        scrfd.prepare(ctx_id=-1, input_size=(640, 640))
+    except Exception as error:
+        raise ValueError(f"Failed to initialize SCRFD model: {error}") from error
+
+    try:
+        yolo = YOLO5Face(model_path=args.yolo5face)
+    except Exception as error:
+        if isinstance(error, ValueError):
+            raise
+        raise ValueError(f"Failed to load YOLO5Face model from {args.yolo5face}: {error}") from error
+
+    scrfd_ms, yolo_ms, fusion_ms, total_ms = [], [], [], []
+    scrfd_faces, yolo_faces, fused_faces = [], [], []
+
+    for iteration in range(6):
+        t0 = time.perf_counter()
+        t_scrfd_start = time.perf_counter()
+        boxes, landmarks = scrfd.detect(image, max_num=0)
+        t_scrfd = (time.perf_counter() - t_scrfd_start) * 1000.0
+
+        current_scrfd = []
+        if boxes is not None and len(boxes) > 0:
+            for idx, b in enumerate(boxes):
+                if len(b) >= 5 and np.isfinite(b[:5]).all():
+                    pts = _valid_points(landmarks[idx], b[:4]) if landmarks is not None and len(landmarks) > idx else None
+                    current_scrfd.append(FaceDetection(box=np.asarray(b[:4], dtype=float), confidence=float(b[4]), landmarks=pts))
+
+        t_yolo_start = time.perf_counter()
+        current_yolo = yolo.detect(image)
+        t_yolo = (time.perf_counter() - t_yolo_start) * 1000.0
+
+        t_fusion_start = time.perf_counter()
+        current_fused = fuse_faces(current_scrfd, current_yolo, image.shape)
+        t_fusion = (time.perf_counter() - t_fusion_start) * 1000.0
+
+        t_total = (time.perf_counter() - t0) * 1000.0
+
+        if iteration:
+            scrfd_ms.append(t_scrfd)
+            yolo_ms.append(t_yolo)
+            fusion_ms.append(t_fusion)
+            total_ms.append(t_total)
+        scrfd_faces = current_scrfd
+        yolo_faces = current_yolo
+        fused_faces = current_fused
+
+    two_detector = 0
+    scrfd_only = 0
+    yolo_only = 0
+    for f in fused_faces:
+        in_scrfd = any(_iou(s.box, f.box) >= 0.55 for s in scrfd_faces)
+        in_yolo = any(_iou(y.box, f.box) >= 0.55 for y in yolo_faces)
+        if in_scrfd and in_yolo:
+            two_detector += 1
+        elif in_scrfd:
+            scrfd_only += 1
+        elif in_yolo:
+            yolo_only += 1
+
+    artifacts = []
+    for path in (scrfd_path, args.yolo5face):
+        with path.open('rb') as stream:
+            digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+        artifacts.append({'file': path.name, 'bytes': path.stat().st_size, 'sha256': digest})
+
+    report = {
+        'provider': 'CPUExecutionProvider',
+        'available_providers': ort.get_available_providers(),
+        'image_shape': list(image.shape),
+        'warm_samples': len(total_ms),
+        'scrfd_count': len(scrfd_faces),
+        'scrfd_with_landmarks': sum(1 for d in scrfd_faces if d.landmarks is not None),
+        'yolo5face_count': len(yolo_faces),
+        'yolo5face_with_landmarks': sum(1 for d in yolo_faces if d.landmarks is not None),
+        'fused_count': len(fused_faces),
+        'fused_with_landmarks': sum(1 for d in fused_faces if d.landmarks is not None),
+        'fused_two_detector_count': two_detector,
+        'fused_scrfd_only_count': scrfd_only,
+        'fused_yolo5face_only_count': yolo_only,
+        'p50_scrfd_ms': float(np.percentile(scrfd_ms, 50)),
+        'p95_scrfd_ms': float(np.percentile(scrfd_ms, 95)),
+        'p50_yolo5face_ms': float(np.percentile(yolo_ms, 50)),
+        'p95_yolo5face_ms': float(np.percentile(yolo_ms, 95)),
+        'p50_fusion_ms': float(np.percentile(fusion_ms, 50)),
+        'p95_fusion_ms': float(np.percentile(fusion_ms, 95)),
+        'p50_total_ms': float(np.percentile(total_ms, 50)),
+        'p95_total_ms': float(np.percentile(total_ms, 95)),
+        'models': artifacts
+    }
+    print(json.dumps(report, indent=2))
+
+
 def main():
     parser = argparse.ArgumentParser(description='Fridge person recognition: model feasibility')
     commands = parser.add_subparsers(dest='command', required=True)
@@ -184,12 +309,19 @@ def main():
     encoders.add_argument('--recognizer', type=Path, default=Path('models/w600k_r50.onnx'))
     encoders.add_argument('--adaface', type=Path, default=Path('models/adaface_ir50_ms1mv2.ckpt'))
     encoders.add_argument('--magface', type=Path, default=Path('models/magface_iresnet50.pth'))
+    detectors = commands.add_parser('check-detectors', help='Offline SCRFD + YOLO5Face detection and WBF fusion check')
+    detectors.add_argument('--image', type=Path, required=True)
+    detectors.add_argument('--scrfd', type=Path, default=None)
+    detectors.add_argument('--detector', type=Path, default=Path('models/det_10g.onnx'))
+    detectors.add_argument('--yolo5face', type=Path, default=Path('models/yolov5s-face.onnx'))
     args = parser.parse_args()
     try:
         if args.command == 'check-models':
             check_models(args)
         elif args.command == 'check-encoders':
             check_encoders(args)
+        elif args.command == 'check-detectors':
+            check_detectors(args)
         elif args.command in ('calibrate-scores', 'evaluate-scores'):
             from .ensemble import execute
             execute(args)

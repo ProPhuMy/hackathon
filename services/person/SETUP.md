@@ -333,3 +333,71 @@ recorded in ignored `models/encoder-manifest.json`. No new recordings were used.
 The full five-network runtime still needs YOLO5Face, BoT-SORT, separate AdaFace
 gallery enrollment, temporal integration, quality calibration, and compatible
 ensemble score artifacts before it can publish named ensemble events.
+
+## Offline dual-detector diagnostic CLI (SCRFD + YOLO5Face + WBF)
+
+`check-detectors` runs SCRFD and YOLO5Face on the same local image, fuses their candidate
+boxes using `detection.fuse_faces`, and reports aggregate detection counts, source
+attributions, and timing diagnostics without printing or storing pixels, landmarks, or
+embeddings:
+
+```bash
+uv run fridge-person check-detectors \
+  --image models/face.jpg \
+  --scrfd models/det_10g.onnx \
+  --yolo5face models/yolov5s-face.onnx
+```
+
+Arguments:
+- `--image`: local face image file (required).
+- `--scrfd` (or `--detector`): local SCRFD ONNX checkpoint (default `models/det_10g.onnx`).
+- `--yolo5face`: local YOLO5Face ONNX checkpoint (default `models/yolov5s-face.onnx`).
+
+### YOLO5Face export specification and verified recipe
+
+Upstream repository: `https://github.com/deepcam-cn/yolov5-face`, pinned commit
+`152c688d551aefb973b7b589fb0691c93dab3564` (GPL-3.0).
+
+Export command:
+```bash
+python export.py --weights weights/yolov5s-face.pt --img_size 640 --batch_size 1
+```
+
+Supported ONNX graph layout:
+- Requires `model.model[-1].export_cat = True` (as set by official `export.py`).
+- Input: exactly 1 float32 NCHW tensor `(batch, 3, height, width)`, default `(1, 3, 640, 640)` float32 in `[0.0, 1.0]`. Spatial dimensions must be fixed positive integers (multiples of 32); dynamic or partially dynamic spatial dimensions are rejected because the pinned upstream exporter only makes batch dynamic.
+- Output: exactly 1 float32 rank-3 decoded tensor `(batch, num_candidates, 16)`. The 16 channels per candidate are:
+  - `[0:2]`: box center coordinates `(cx, cy)` in letterbox pixels.
+  - `[2:4]`: box dimensions `(w, h)` in letterbox pixels.
+  - `[4]`: objectness confidence (sigmoid applied).
+  - `[5:15]`: 5 facial landmarks `(x1, y1), (x2, y2), (x3, y3), (x4, y4), (x5, y5)`
+    in letterbox coordinates, corresponding to left eye, right eye, nose, left mouth,
+    and right mouth.
+  - `[15]`: face class probability (sigmoid applied, `nc=1`).
+- Incompatible ONNX layouts (e.g. generic Ultralytics 6-channel or 85-channel outputs)
+  are rejected helpfully with an explicit error.
+- Preprocessing recipe: input BGR uint8 is resized with aspect-ratio letterboxing to
+  `(640, 640)` with padding color `(114, 114, 114)`. The canvas is converted from BGR
+  to RGB following the verified official training/dataset loader (`utils/datasets.py`),
+  noting that `detect_face.py` contained an extraneous BGR2RGB flip on already RGB data.
+  Values are normalized to `[0.0, 1.0]` by dividing by 255.0.
+- Postprocessing: candidate confidence is `conf = obj_conf * cls_conf`. Bounding boxes
+  and five landmarks are inverse-projected from letterbox coordinates to original image
+  space, clipped to original dimensions, and filtered by greedy IoU NMS (default 0.5)
+  and confidence threshold (default 0.3).
+- Weighted Boxes Fusion: `detection.fuse_faces` blends overlapping boxes (`iou_thr=0.55`)
+  with equal detector weights, while conservatively preserving source-owned landmarks from
+  the highest-scoring detection (SCRFD preferred on ties). Single-detector faces survive.
+
+### Limitations and incomplete checks
+
+- No official pre-exported YOLO5Face ONNX artifact was committed to this repository.
+  Launches never download weights. Explicit local model files missing or incompatible fail
+  visibly.
+- Testing is performed using comprehensive synthetic model outputs and session doubles
+  exercising letterbox round-trips (including non-square inputs), empty detections, NMS,
+  confidence math, landmark-box pairing, invalid layouts, and WBF fusion.
+- No real-weight smoke test is claimed for YOLO5Face until a verified exported artifact is
+  provided locally.
+- Full five-network runtime integration still requires BoT-SORT, separate AdaFace gallery
+  enrollment, temporal integration, and calibrated quality weighting.
