@@ -1,0 +1,292 @@
+{
+  "schema_version": "1.0",
+  "description": "Backend synthetic real-Matcher replay benchmark",
+  "cases": [
+    {
+      "case_id": "canonical_put_take",
+      "description": "Scripted scenario: PUT by p_01, TAKE by p_02, idle tick",
+      "calls": [
+        {
+          "kind": "person",
+          "event": {
+            "event_id": "p_canon_01",
+            "topic": "person.seen",
+            "track_id": 1,
+            "person_id": "p_01",
+            "ts": "2026-11-08T09:15:00.000Z",
+            "confidence": 0.94
+          }
+        },
+        {
+          "kind": "item",
+          "event": {
+            "event_id": "i_canon_put",
+            "topic": "item.event",
+            "type": "PUT",
+            "item_id": "item_042",
+            "item_label": "milk carton",
+            "ts": "2026-11-08T09:15:01.000Z",
+            "confidence": 0.90
+          }
+        },
+        {
+          "kind": "person",
+          "event": {
+            "event_id": "p_canon_02",
+            "topic": "person.seen",
+            "track_id": 2,
+            "person_id": "p_02",
+            "ts": "2026-11-08T09:15:02.000Z",
+            "confidence": 0.91
+          }
+        },
+        {
+          "kind": "item",
+          "event": {
+            "event_id": "i_canon_take",
+            "topic": "item.event",
+            "type": "TAKE",
+            "item_id": "item_042",
+            "item_label": "milk carton",
+            "ts": "2026-11-08T09:15:03.000Z",
+            "confidence": 0.87
+          }
+        },
+        {
+          "kind": "tick",
+          "now_ts": "2026-11-08T09:15:10.000Z"
+        }
+      ],
+      "expected_outputs": [
+        {
+          "event_id": "i_canon_put",
+          "topic": "fridge.event",
+          "type": "PUT",
+          "item_id": "item_042",
+          "item_label": "milk carton",
+          "person_id": "p_01",
+          "owner_id": "p_01",
+          "ts": "2026-11-08T09:15:01.000Z",
+          "confidence": 0.5423,
+          "status": "ok"
+        },
+        {
+          "event_id": "i_canon_take",
+          "topic": "fridge.event",
+          "type": "TAKE",
+          "item_id": "item_042",
+          "item_label": "milk carton",
+          "person_id": "p_02",
+          "owner_id": "p_01",
+          "ts": "2026-11-08T09:15:03.000Z",
+          "confidence": 0.8282,
+          "status": "wrong_owner"
+        }
+      ],
+      "expected_inventory": {}
+    },
+    {
+      "case_id": "unknown_actor_take",
+      "description": "PUT by known person p_01 finalized, then TAKE by stranger (person_id null) yields uncertain alert",
+      "calls": [
+        {
+          "kind": "person",
+          "event": {
+            "event_id": "p_unk_01",
+            "topic": "person.seen",
+            "track_id": 1,
+            "person_id": "p_01",
+            "ts": "2026-11-08T09:15:00.000Z",
+            "confidence": 0.94
+          }
+        },
+        {
+          "kind": "item",
+          "event": {
+            "event_id": "i_unk_put",
+            "topic": "item.event",
+            "type": "PUT",
+            "item_id": "item_050",
+            "item_label": "soda can",
+            "ts": "2026-11-08T09:15:01.000Z",
+            "confidence": 0.90
+          }
+        },
+        {
+          "kind": "tick",
+          "now_ts": "2026-11-08T09:15:08.000Z"
+        },
+        {
+          "kind": "person",
+          "event": {
+            "event_id": "p_unk_stranger",
+            "topic": "person.seen",
+            "track_id": 5,
+            "person_id": null,
+            "ts": "2026-11-08T09:15:10.000Z",
+            "confidence": 0.90
+          }
+        },
+        {
+          "kind": "item",
+          "event": {
+            "event_id": "i_unk_take",
+            "topic": "item.event",
+            "type": "TAKE",
+            "item_id": "item_050",
+            "item_label": "soda can",
+            "ts": "2026-11-08T09:15:11.000Z",
+            "confidence": 0.85
+          }
+        },
+        {
+          "kind": "tick",
+          "now_ts": "2026-11-08T09:15:18.000Z"
+        }
+      ],
+      "expected_outputs": [
+        {
+          "event_id": "i_unk_put",
+          "topic": "fridge.event",
+          "type": "PUT",
+          "item_id": "item_050",
+          "item_label": "soda can",
+          "person_id": "p_01",
+          "owner_id": "p_01",
+          "ts": "2026-11-08T09:15:01.000Z",
+          "confidence": 0.8874,
+          "status": "ok"
+        },
+        {
+          "event_id": "i_unk_take",
+          "topic": "fridge.event",
+          "type": "TAKE",
+          "item_id": "item_050",
+          "item_label": "soda can",
+          "person_id": null,
+          "owner_id": "p_01",
+          "ts": "2026-11-08T09:15:11.000Z",
+          "confidence": 0.85,
+          "status": "uncertain"
+        }
+      ],
+      "expected_inventory": {}
+    },
+    {
+      "case_id": "duplicate_input_handling",
+      "description": "Duplicate item event with same event_id is dropped before Matcher mutation",
+      "calls": [
+        {
+          "kind": "person",
+          "event": {
+            "event_id": "p_dup_01",
+            "topic": "person.seen",
+            "track_id": 1,
+            "person_id": "p_01",
+            "ts": "2026-11-08T09:15:00.000Z",
+            "confidence": 0.94
+          }
+        },
+        {
+          "kind": "item",
+          "event": {
+            "event_id": "i_dup_1",
+            "topic": "item.event",
+            "type": "PUT",
+            "item_id": "item_060",
+            "item_label": "apple juice",
+            "ts": "2026-11-08T09:15:01.000Z",
+            "confidence": 0.90
+          }
+        },
+        {
+          "kind": "item",
+          "event": {
+            "event_id": "i_dup_1",
+            "topic": "item.event",
+            "type": "PUT",
+            "item_id": "item_060",
+            "item_label": "apple juice",
+            "ts": "2026-11-08T09:15:01.000Z",
+            "confidence": 0.90
+          }
+        },
+        {
+          "kind": "tick",
+          "now_ts": "2026-11-08T09:15:08.000Z"
+        }
+      ],
+      "expected_outputs": [
+        {
+          "event_id": "i_dup_1",
+          "topic": "fridge.event",
+          "type": "PUT",
+          "item_id": "item_060",
+          "item_label": "apple juice",
+          "person_id": "p_01",
+          "owner_id": "p_01",
+          "ts": "2026-11-08T09:15:01.000Z",
+          "confidence": 0.8874,
+          "status": "ok"
+        }
+      ],
+      "expected_inventory": {
+        "item_060": "p_01"
+      }
+    },
+    {
+      "case_id": "call_order_tick_before_late_person",
+      "description": "Item tested with tick just before boundary, tick at boundary finalizes item as uncertain before late person arrives",
+      "calls": [
+        {
+          "kind": "item",
+          "event": {
+            "event_id": "i_order_1",
+            "topic": "item.event",
+            "type": "PUT",
+            "item_id": "item_070",
+            "item_label": "sliced bread",
+            "ts": "2026-11-08T09:15:01.000Z",
+            "confidence": 0.85
+          }
+        },
+        {
+          "kind": "tick",
+          "now_ts": "2026-11-08T09:15:07.999Z"
+        },
+        {
+          "kind": "tick",
+          "now_ts": "2026-11-08T09:15:08.000Z"
+        },
+        {
+          "kind": "person",
+          "event": {
+            "event_id": "p_order_late",
+            "topic": "person.seen",
+            "track_id": 1,
+            "person_id": "p_01",
+            "ts": "2026-11-08T09:15:02.000Z",
+            "confidence": 0.95
+          }
+        }
+      ],
+      "expected_outputs": [
+        {
+          "event_id": "i_order_1",
+          "topic": "fridge.event",
+          "type": "PUT",
+          "item_id": "item_070",
+          "item_label": "sliced bread",
+          "person_id": null,
+          "owner_id": null,
+          "ts": "2026-11-08T09:15:01.000Z",
+          "confidence": 0.85,
+          "status": "uncertain"
+        }
+      ],
+      "expected_inventory": {
+        "item_070": null
+      }
+    }
+  ]
+}

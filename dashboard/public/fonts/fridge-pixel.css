@@ -1,0 +1,14 @@
+@font-face {
+  font-family: 'Fridge Pixel';
+  src: url('./fridge-pixel.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+/* Optional shadow treatment from image.png; keep it out of the font outlines. */
+.fridge-pixel-display {
+  font-family: 'Fridge Pixel', monospace;
+  font-weight: 400;
+  text-shadow: 0 0.12em #c4cddd, 0 0.3em #252b43;
+}

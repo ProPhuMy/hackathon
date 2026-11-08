@@ -3,17 +3,41 @@ name = "fridge-item"
 version = "0.1.0"
 description = "Fridge Tracker item service"
 requires-python = ">=3.11,<3.12"
-dependencies = []
+dependencies = [
+    "boxmot>=26.0.0",
+    "confluent-kafka>=2.16.1",
+    "numpy>=2.4.6",
+    "opencv-python>=4.11.0.86",
+    "requests>=2.34.2",
+    "scipy>=1.17.1",
+    "torch>=2.8,<2.11",
+    "transformers>=5.22.2",
+    "ultralytics>=8.4.207",
+]
 
 [project.scripts]
-fridge-item = "fridge_item:main"
+fridge-item = "src.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.13.2,<0.14.0"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "src"
+module-root = ""
 
 [dependency-groups]
 dev = [
     "jsonschema>=4.26.0",
     "pytest>=9.2.0",
 ]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu128", marker = "sys_platform == 'linux'" }]
+torchvision = [{ index = "pytorch-cu128", marker = "sys_platform == 'linux'" }]
+
