@@ -569,3 +569,110 @@ def test_people_endpoints_fail_closed_on_worker_failure():
     assert client.post("/people", json={"person_id": "p_01", "name": "Alice"}).status_code == 503
     assert client.get("/people/p_01").status_code == 503
     assert client.put("/people/p_01", json={"name": "Alice"}).status_code == 503
+
+
+def test_get_trends_endpoint_success():
+    conn = MockPostgresConn()
+    store = PostgresStore(conn)
+
+    store._insert_fridge_event(make_sample_event("e1", "i1", "Milk", "PUT", "p_01", "p_01", "ok", "2026-11-02T10:00:00.000Z"))
+    store._insert_fridge_event(make_sample_event("e2", "i1", "Milk", "TAKE", "p_02", "p_01", "wrong_owner", "2026-11-03T10:00:00.000Z"))
+
+    client = get_test_client(store)
+    resp = client.get("/trends?start_ts=2026-11-01T00:00:00Z&end_ts=2026-11-08T00:00:00Z")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["event_count"] == 2
+    assert data["put_count"] == 1
+    assert data["take_count"] == 1
+    assert data["wrong_owner_count"] == 1
+    assert data["uncertain_count"] == 0
+    assert len(data["wrong_owner_by_pair"]) == 1
+    assert data["wrong_owner_by_pair"][0] == {"person_id": "p_02", "owner_id": "p_01", "count": 1}
+    assert data["rankings_truncated"] is False
+    assert data["owner_id"] is None
+
+
+def test_get_trends_endpoint_owner_filter():
+    conn = MockPostgresConn()
+    store = PostgresStore(conn)
+
+    store._insert_fridge_event(make_sample_event("e1", "i1", "Milk", "PUT", "p_01", "p_01", "ok", "2026-11-02T10:00:00.000Z"))
+    store._insert_fridge_event(make_sample_event("e2", "i2", "Juice", "PUT", "p_02", "p_02", "ok", "2026-11-03T10:00:00.000Z"))
+
+    client = get_test_client(store)
+    resp = client.get("/trends?start_ts=2026-11-01T00:00:00Z&end_ts=2026-11-08T00:00:00Z&owner_id=p_01")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["owner_id"] == "p_01"
+    assert data["event_count"] == 1
+    assert data["put_count"] == 1
+
+
+def test_get_trends_endpoint_validation_422():
+    conn = MockPostgresConn()
+    store = PostgresStore(conn)
+    client = get_test_client(store)
+
+    # Missing parameters
+    assert client.get("/trends").status_code == 422
+    assert client.get("/trends?start_ts=2026-11-01T00:00:00Z").status_code == 422
+
+    # Naive timestamp
+    assert client.get("/trends?start_ts=2026-11-01T00:00:00&end_ts=2026-11-08T00:00:00Z").status_code == 422
+
+    # Invalid calendar date
+    assert client.get("/trends?start_ts=2026-02-30T00:00:00Z&end_ts=2026-11-08T00:00:00Z").status_code == 422
+
+    # start >= end
+    assert client.get("/trends?start_ts=2026-11-08T00:00:00Z&end_ts=2026-11-08T00:00:00Z").status_code == 422
+    assert client.get("/trends?start_ts=2026-11-09T00:00:00Z&end_ts=2026-11-08T00:00:00Z").status_code == 422
+
+    # Exceeds 366 days
+    assert client.get("/trends?start_ts=2024-01-01T00:00:00Z&end_ts=2025-01-05T00:00:00Z").status_code == 422
+
+    # Invalid owner_id
+    assert client.get("/trends?start_ts=2026-11-01T00:00:00Z&end_ts=2026-11-08T00:00:00Z&owner_id=bad+owner+id!").status_code == 422
+
+    # Precision exceeding 6 fractional digits (dot and comma)
+    assert client.get("/trends?start_ts=2026-11-01T00:00:00.1234567Z&end_ts=2026-11-08T00:00:00Z").status_code == 422
+    assert client.get("/trends?start_ts=2026-11-01T00:00:00,0005001Z&end_ts=2026-11-08T00:00:00Z").status_code == 422
+
+    # Extreme offset overflow
+    assert client.get("/trends?start_ts=9999-12-31T23:59:59-14:00&end_ts=9999-12-31T23:59:59Z").status_code == 422
+
+
+def test_get_trends_endpoint_submillisecond_success():
+    conn = MockPostgresConn()
+    store = PostgresStore(conn)
+
+    store._insert_fridge_event(make_sample_event("e1", "i1", "Milk", "PUT", "p_01", "p_01", "ok", "2026-11-01T00:00:00.000550Z"))
+
+    client = get_test_client(store)
+    # Test dot separator
+    resp1 = client.get("/trends?start_ts=2026-11-01T00:00:00.000500Z&end_ts=2026-11-01T00:00:00.000600Z")
+    assert resp1.status_code == 200
+    data1 = resp1.json()
+    assert data1["event_count"] == 1
+    assert data1["start_ts"] == "2026-11-01T00:00:00.000500Z"
+    assert data1["end_ts"] == "2026-11-01T00:00:00.000600Z"
+
+    # Test comma separator normalized to dot in output
+    resp2 = client.get("/trends?start_ts=2026-11-01T00:00:00,000500Z&end_ts=2026-11-01T00:00:00,000600Z")
+    assert resp2.status_code == 200
+    data2 = resp2.json()
+    assert data2["event_count"] == 1
+    assert data2["start_ts"] == "2026-11-01T00:00:00.000500Z"
+    assert data2["end_ts"] == "2026-11-01T00:00:00.000600Z"
+
+
+def test_get_trends_endpoint_fails_closed_on_worker_failure():
+    conn = MockPostgresConn()
+    store = PostgresStore(conn)
+
+    class DummyFailedWorker:
+        worker_failed = True
+
+    client = get_test_client(store, worker_controller=DummyFailedWorker())
+    resp = client.get("/trends?start_ts=2026-11-01T00:00:00Z&end_ts=2026-11-08T00:00:00Z")
+    assert resp.status_code == 503

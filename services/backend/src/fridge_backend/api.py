@@ -21,6 +21,7 @@ from fridge_backend.store import (
     DuplicatePersonError,
     validate_person_id,
     validate_name,
+    validate_trends_range,
 )
 
 logger = logging.getLogger(__name__)
@@ -134,6 +135,33 @@ def create_app(
     async def get_inventory() -> list[dict]:
         """Bare list of {item_id, item_label, owner_id, since_ts} projected over all history."""
         return await safe_read(read_store.get_inventory)
+
+    @app.get("/trends", response_class=JSONResponse)
+    async def get_trends(
+        start_ts: str = Query(..., description="Start timestamp of half-open interval (offset-aware ISO-8601)"),
+        end_ts: str = Query(..., description="End timestamp of half-open interval (offset-aware ISO-8601)"),
+        owner_id: str | None = Query(default=None, description="Optional owner_id filter"),
+    ) -> dict:
+        """Returns aggregated metrics and top-20 wrong_owner pair rankings for [start_ts, end_ts)."""
+        try:
+            _, _, start_iso, end_iso = validate_trends_range(start_ts, end_ts)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid time range: {exc}",
+            ) from exc
+
+        valid_owner = None
+        if owner_id is not None:
+            try:
+                valid_owner = validate_person_id(owner_id)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Invalid owner_id: {exc}",
+                ) from exc
+
+        return await safe_read(read_store.get_trends, start_iso, end_iso, valid_owner)
 
     @app.get("/people", response_class=JSONResponse)
     async def get_people() -> list[dict]:

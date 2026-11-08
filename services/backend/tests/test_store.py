@@ -13,6 +13,7 @@ from fridge_backend.store import (
     JournalRecord,
     create_postgres_connection,
     DuplicatePersonError,
+    validate_trends_range,
 )
 try:
     from fridge_backend.store import VersionMismatchError
@@ -21,6 +22,7 @@ except ImportError:
         """Temporary placeholder for red tests until defined in store.py."""
         pass
 from fridge_backend.matcher import Matcher, MatcherConfig, MATCHER_VERSION
+from fridge_backend import events
 
 
 class StubMatcher:
@@ -1142,6 +1144,363 @@ def test_real_postgres_people_integration():
             retained = read_store.get_person("p_real_01")
             assert retained is not None
             assert retained["name"] == "Alice Updated"
+    finally:
+        with psycopg.connect(dsn, autocommit=True) as cleanup_conn:
+            with cleanup_conn.cursor() as cur:
+                cur.execute(f"DROP SCHEMA IF EXISTS {schema_name} CASCADE;")
+
+
+def make_test_fridge_event(
+    event_id: str,
+    item_id: str,
+    item_label: str,
+    ev_type: str,
+    person_id: str | None,
+    owner_id: str | None,
+    status: str,
+    ts: str,
+    confidence: float = 0.9,
+) -> dict:
+    item = {
+        "event_id": event_id,
+        "item_id": item_id,
+        "item_label": item_label,
+        "type": ev_type,
+        "ts": ts,
+        "confidence": confidence,
+    }
+    return events.fridge_event(
+        item=item,
+        person_id=person_id,
+        owner_id=owner_id,
+        confidence=confidence,
+        status=status,
+    )
+
+
+def test_validate_trends_range():
+    # 1. Type validation
+    with pytest.raises(ValueError, match="must be a string"):
+        validate_trends_range(123, "2026-11-08T00:00:00Z")
+    with pytest.raises(ValueError, match="must be a string"):
+        validate_trends_range("2026-11-01T00:00:00Z", False)
+
+    # 2. Control characters
+    with pytest.raises(ValueError, match="control characters"):
+        validate_trends_range("2026-11-01T00:00:00Z\n", "2026-11-08T00:00:00Z")
+
+    # 3. Naive timestamps
+    with pytest.raises(ValueError, match="offset-aware"):
+        validate_trends_range("2026-11-01T00:00:00", "2026-11-08T00:00:00Z")
+    with pytest.raises(ValueError, match="offset-aware"):
+        validate_trends_range("2026-11-01T00:00:00Z", "2026-11-08T00:00:00")
+
+    # 4. Invalid calendar dates
+    with pytest.raises(ValueError, match="valid ISO-8601"):
+        validate_trends_range("2026-02-30T00:00:00Z", "2026-11-08T00:00:00Z")
+
+    # 5. start >= end
+    with pytest.raises(ValueError, match="strictly before"):
+        validate_trends_range("2026-11-08T00:00:00Z", "2026-11-08T00:00:00Z")
+    with pytest.raises(ValueError, match="strictly before"):
+        validate_trends_range("2026-11-09T00:00:00Z", "2026-11-08T00:00:00Z")
+
+    # 6. Exceeds 366 days
+    with pytest.raises(ValueError, match="366 days"):
+        validate_trends_range("2024-01-01T00:00:00Z", "2025-01-05T00:00:00Z")
+
+    # 7. Valid ranges and UTC conversion
+    s_utc, e_utc, s_iso, e_iso = validate_trends_range(
+        "2026-11-01T05:00:00+05:00",
+        "2026-11-08T00:00:00Z"
+    )
+    assert s_iso == "2026-11-01T00:00:00.000Z"
+    assert e_iso == "2026-11-08T00:00:00.000Z"
+
+    # 8. Microsecond precision preservation
+    s_sub, e_sub, s_sub_iso, e_sub_iso = validate_trends_range(
+        "2026-11-01T00:00:00.000500Z",
+        "2026-11-01T00:00:00.000600Z"
+    )
+    assert s_sub_iso == "2026-11-01T00:00:00.000500Z"
+    assert e_sub_iso == "2026-11-01T00:00:00.000600Z"
+    assert s_sub_iso != e_sub_iso
+
+    # 9. Precision exceeding 6 fractional digits rejected (both dot and comma separators)
+    with pytest.raises(ValueError, match="exceeds maximum supported 6 fractional digits"):
+        validate_trends_range("2026-11-01T00:00:00.1234567Z", "2026-11-08T00:00:00Z")
+    with pytest.raises(ValueError, match="exceeds maximum supported 6 fractional digits"):
+        validate_trends_range("2026-11-01T00:00:00,0005001Z", "2026-11-08T00:00:00Z")
+
+    # 10. Valid comma fractional separator normalized to dot
+    _, _, s_comma_iso, _ = validate_trends_range(
+        "2026-11-01T00:00:00,000500Z",
+        "2026-11-08T00:00:00Z"
+    )
+    assert s_comma_iso == "2026-11-01T00:00:00.000500Z"
+
+    # 11. Extreme offset overflow rejected
+    with pytest.raises(ValueError, match="overflow"):
+        validate_trends_range("9999-12-31T23:59:59-14:00", "9999-12-31T23:59:59Z")
+
+
+def test_store_get_trends_empty():
+    conn = MockPostgresConn()
+    store = PostgresStore(conn)
+
+    res = store.get_trends("2026-11-01T00:00:00Z", "2026-11-08T00:00:00Z")
+    assert res["event_count"] == 0
+    assert res["put_count"] == 0
+    assert res["take_count"] == 0
+    assert res["wrong_owner_count"] == 0
+    assert res["uncertain_count"] == 0
+    assert res["wrong_owner_by_pair"] == []
+    assert res["rankings_truncated"] is False
+    assert res["owner_id"] is None
+    assert res["start_ts"] == "2026-11-01T00:00:00.000Z"
+    assert res["end_ts"] == "2026-11-08T00:00:00.000Z"
+
+
+def test_store_get_trends_counts_and_filters():
+    conn = MockPostgresConn()
+    store = PostgresStore(conn)
+
+    events_list = [
+        # In range
+        make_test_fridge_event("e1", "i1", "Milk", "PUT", "p_01", "p_01", "ok", "2026-11-02T10:00:00.000Z", 0.9),
+        make_test_fridge_event("e2", "i2", "Juice", "PUT", "p_02", "p_02", "uncertain", "2026-11-03T10:00:00.000Z", 0.4),
+        make_test_fridge_event("e3", "i1", "Milk", "TAKE", "p_01", "p_01", "ok", "2026-11-04T10:00:00.000Z", 0.9),
+        make_test_fridge_event("e4", "i2", "Juice", "TAKE", "p_01", "p_02", "wrong_owner", "2026-11-05T10:00:00.000Z", 0.85),
+        make_test_fridge_event("e5", "i3", "Water", "TAKE", None, "p_02", "uncertain", "2026-11-06T10:00:00.000Z", 0.3),
+        # Out of range (before)
+        make_test_fridge_event("e0", "i0", "Old", "PUT", "p_01", "p_01", "ok", "2026-10-31T23:59:59.000Z", 0.9),
+        # Out of range (after)
+        make_test_fridge_event("e6", "i6", "Future", "PUT", "p_01", "p_01", "ok", "2026-11-08T12:00:00.000Z", 0.9),
+    ]
+
+    for ev in events_list:
+        store._insert_fridge_event(ev)
+
+    res = store.get_trends("2026-11-01T00:00:00Z", "2026-11-08T00:00:00Z")
+    assert res["event_count"] == 5
+    assert res["put_count"] == 2
+    assert res["take_count"] == 3
+    assert res["wrong_owner_count"] == 1
+    assert res["uncertain_count"] == 2
+    assert len(res["wrong_owner_by_pair"]) == 1
+    assert res["wrong_owner_by_pair"][0] == {"person_id": "p_01", "owner_id": "p_02", "count": 1}
+    assert res["rankings_truncated"] is False
+
+
+def test_store_get_trends_half_open_boundaries():
+    conn = MockPostgresConn()
+    store = PostgresStore(conn)
+
+    start_iso = "2026-11-01T00:00:00.000Z"
+    end_iso = "2026-11-08T00:00:00.000Z"
+
+    # Exactly at start_ts (included)
+    store._insert_fridge_event(make_test_fridge_event("e_start", "i1", "Milk", "PUT", "p_01", "p_01", "ok", start_iso))
+    # Exactly at end_ts (excluded)
+    store._insert_fridge_event(make_test_fridge_event("e_end", "i2", "Juice", "PUT", "p_01", "p_01", "ok", end_iso))
+
+    res = store.get_trends(start_iso, end_iso)
+    assert res["event_count"] == 1
+    assert res["put_count"] == 1
+
+
+def test_store_get_trends_submillisecond_boundaries():
+    conn = MockPostgresConn()
+    store = PostgresStore(conn)
+
+    start_ts = "2026-11-01T00:00:00.000500Z"
+    end_ts = "2026-11-01T00:00:00.000600Z"
+
+    # 1. Exactly at start_ts (included)
+    store._insert_fridge_event(make_test_fridge_event("e_exact_start", "i1", "Item1", "PUT", "p_01", "p_01", "ok", "2026-11-01T00:00:00.000500Z"))
+    # 2. Strictly inside range (included)
+    store._insert_fridge_event(make_test_fridge_event("e_mid", "i2", "Item2", "TAKE", "p_02", "p_01", "wrong_owner", "2026-11-01T00:00:00.000550Z"))
+    # 3. Exactly at end_ts (excluded)
+    store._insert_fridge_event(make_test_fridge_event("e_exact_end", "i3", "Item3", "PUT", "p_01", "p_01", "ok", "2026-11-01T00:00:00.000600Z"))
+    # 4. Strictly before start_ts (excluded)
+    store._insert_fridge_event(make_test_fridge_event("e_before", "i4", "Item4", "PUT", "p_01", "p_01", "ok", "2026-11-01T00:00:00.000499Z"))
+
+    res = store.get_trends(start_ts, end_ts)
+    assert res["event_count"] == 2
+    assert res["put_count"] == 1
+    assert res["take_count"] == 1
+    assert res["wrong_owner_count"] == 1
+    assert res["start_ts"] == start_ts
+    assert res["end_ts"] == end_ts
+
+
+def test_store_get_trends_owner_filter():
+    conn = MockPostgresConn()
+    store = PostgresStore(conn)
+
+    store._insert_fridge_event(make_test_fridge_event("e1", "i1", "Milk", "PUT", "p_01", "p_01", "ok", "2026-11-02T10:00:00.000Z"))
+    store._insert_fridge_event(make_test_fridge_event("e2", "i1", "Milk", "TAKE", "p_02", "p_01", "wrong_owner", "2026-11-03T10:00:00.000Z"))
+    store._insert_fridge_event(make_test_fridge_event("e3", "i2", "Yogurt", "TAKE", "p_01", "p_02", "wrong_owner", "2026-11-04T10:00:00.000Z"))
+
+    # Filter for p_01
+    res1 = store.get_trends("2026-11-01T00:00:00Z", "2026-11-08T00:00:00Z", owner_id="p_01")
+    assert res1["owner_id"] == "p_01"
+    assert res1["event_count"] == 2
+    assert res1["put_count"] == 1
+    assert res1["take_count"] == 1
+    assert res1["wrong_owner_count"] == 1
+    assert len(res1["wrong_owner_by_pair"]) == 1
+    assert res1["wrong_owner_by_pair"][0] == {"person_id": "p_02", "owner_id": "p_01", "count": 1}
+
+    # Filter for p_02
+    res2 = store.get_trends("2026-11-01T00:00:00Z", "2026-11-08T00:00:00Z", owner_id="p_02")
+    assert res2["owner_id"] == "p_02"
+    assert res2["event_count"] == 1
+    assert res2["take_count"] == 1
+    assert res2["wrong_owner_by_pair"][0] == {"person_id": "p_01", "owner_id": "p_02", "count": 1}
+
+
+def test_store_get_trends_wrong_owner_pair_ranking_and_truncation():
+    conn = MockPostgresConn()
+    store = PostgresStore(conn)
+
+    # 1. Edge condition: same actor and owner (should NOT accuse)
+    store._insert_fridge_event(make_test_fridge_event("e_same", "i_s", "S", "TAKE", "p_01", "p_01", "wrong_owner", "2026-11-02T10:00:00.000Z"))
+
+    # 2. Edge condition: null actor (should NOT accuse)
+    store._insert_fridge_event(make_test_fridge_event("e_null_act", "i_na", "NA", "TAKE", None, "p_01", "wrong_owner", "2026-11-02T10:01:00.000Z"))
+
+    # 3. Edge condition: null owner (should NOT accuse)
+    store._insert_fridge_event(make_test_fridge_event("e_null_own", "i_no", "NO", "TAKE", "p_01", None, "wrong_owner", "2026-11-02T10:02:00.000Z"))
+
+    # 4. Edge condition: uncertain TAKE (should NOT accuse)
+    store._insert_fridge_event(make_test_fridge_event("e_unc", "i_u", "U", "TAKE", "p_02", "p_01", "uncertain", "2026-11-02T10:03:00.000Z", 0.3))
+
+    # 5. Insert 25 distinct valid wrong_owner pairs to verify top 20 truncation and stable tie-break
+    for i in range(1, 26):
+        pid = f"taker_{i:02d}"
+        oid = f"victim_{i:02d}"
+        count = 10 if i == 5 else 1  # taker_05 will have highest count (10)
+        for c in range(count):
+            store._insert_fridge_event(make_test_fridge_event(
+                f"e_pair_{i}_{c}",
+                f"item_{i}",
+                "Item",
+                "TAKE",
+                pid,
+                oid,
+                "wrong_owner",
+                "2026-11-03T10:00:00.000Z",
+                0.85,
+            ))
+
+    res = store.get_trends("2026-11-01T00:00:00Z", "2026-11-08T00:00:00Z")
+    assert res["rankings_truncated"] is True
+    assert len(res["wrong_owner_by_pair"]) == 20
+    # First ranked pair is taker_05 (count 10)
+    assert res["wrong_owner_by_pair"][0]["person_id"] == "taker_05"
+    assert res["wrong_owner_by_pair"][0]["count"] == 10
+
+    # Remaining 19 pairs all have count 1, sorted deterministically by person_id ASC
+    remaining_pids = [p["person_id"] for p in res["wrong_owner_by_pair"][1:]]
+    assert remaining_pids == sorted(remaining_pids)
+
+
+def test_store_get_trends_exceeds_500_records():
+    conn = MockPostgresConn()
+    store = PostgresStore(conn)
+
+    # Insert 550 events in range to prove get_trends evaluates all records and is not capped by limit=500
+    for i in range(550):
+        store._insert_fridge_event(make_test_fridge_event(
+            f"e_bulk_{i}",
+            f"item_{i}",
+            "BulkItem",
+            "PUT",
+            "p_01",
+            "p_01",
+            "ok",
+            "2026-11-04T12:00:00.000Z",
+            0.95,
+        ))
+
+    res = store.get_trends("2026-11-01T00:00:00Z", "2026-11-08T00:00:00Z")
+    assert res["event_count"] == 550
+    assert res["put_count"] == 550
+
+
+def test_real_postgres_trends_integration():
+    dsn = get_real_postgres_dsn()
+    if dsn is None:
+        pytest.skip("TEST_POSTGRES_DSN not set; skipping live Postgres trends integration test")
+
+    import psycopg
+    schema_name = f"test_trends_{uuid.uuid4().hex[:8]}"
+
+    try:
+        with psycopg.connect(dsn, autocommit=True) as setup_conn:
+            with setup_conn.cursor() as cur:
+                cur.execute(f"CREATE SCHEMA {schema_name};")
+    except Exception as exc:
+        pytest.fail(f"TEST_POSTGRES_DSN was set but schema creation failed: {exc}")
+
+    try:
+        with psycopg.connect(dsn, autocommit=True) as worker_conn, psycopg.connect(dsn, autocommit=True) as read_conn:
+            worker_store = PostgresStore(worker_conn, schema=schema_name)
+            read_store = PostgresStore(read_conn, schema=schema_name)
+
+            worker_store.init_db()
+            worker_store.check_or_init_version(MATCHER_VERSION)
+
+            # Insert sample committed events built strictly through events.fridge_event
+            e1 = make_test_fridge_event("e_live_1", "i1", "Milk", "PUT", "p_01", "p_01", "ok", "2026-11-02T10:00:00.000500Z", 0.9)
+            e2 = make_test_fridge_event("e_live_2", "i1", "Milk", "TAKE", "p_02", "p_01", "wrong_owner", "2026-11-03T10:00:00.000550Z", 0.88)
+            e3 = make_test_fridge_event("e_live_3", "i2", "Juice", "TAKE", None, "p_01", "uncertain", "2026-11-04T10:00:00.000Z", 0.4)
+
+            for ev in (e1, e2, e3):
+                worker_store._insert_fridge_event(ev)
+                worker_store._insert_outbox(ev)
+
+            # Measure row counts before trends query across all tables
+            with read_conn.cursor() as cur:
+                cur.execute(f"SELECT COUNT(*) FROM {schema_name}.fridge_events")
+                fe_count_before = cur.fetchone()[0]
+                cur.execute(f"SELECT COUNT(*) FROM {schema_name}.outbox")
+                outbox_count_before = cur.fetchone()[0]
+                cur.execute(f"SELECT COUNT(*) FROM {schema_name}.matcher_journal")
+                journal_count_before = cur.fetchone()[0]
+
+            # Query trends inside explicit SET TRANSACTION READ ONLY to prove read-only behavior at PG transaction level
+            with read_conn.transaction():
+                with read_conn.cursor() as cur:
+                    cur.execute("SET TRANSACTION READ ONLY;")
+                res = read_store.get_trends("2026-11-01T00:00:00.000500Z", "2026-11-08T00:00:00Z")
+
+            assert res["event_count"] == 3
+            assert res["put_count"] == 1
+            assert res["take_count"] == 2
+            assert res["wrong_owner_count"] == 1
+            assert res["uncertain_count"] == 1
+            assert len(res["wrong_owner_by_pair"]) == 1
+            assert res["wrong_owner_by_pair"][0] == {"person_id": "p_02", "owner_id": "p_01", "count": 1}
+
+            # Sub-millisecond boundary exclusion check in live PG
+            with read_conn.transaction():
+                with read_conn.cursor() as cur:
+                    cur.execute("SET TRANSACTION READ ONLY;")
+                res_sub = read_store.get_trends("2026-11-02T10:00:00.000500Z", "2026-11-03T10:00:00.000550Z")
+            assert res_sub["event_count"] == 1
+            assert res_sub["put_count"] == 1
+            assert res_sub["take_count"] == 0
+
+            # Verify read-only guarantee: row counts are identical before and after
+            with read_conn.cursor() as cur:
+                cur.execute(f"SELECT COUNT(*) FROM {schema_name}.fridge_events")
+                assert cur.fetchone()[0] == fe_count_before
+                cur.execute(f"SELECT COUNT(*) FROM {schema_name}.outbox")
+                assert cur.fetchone()[0] == outbox_count_before
+                cur.execute(f"SELECT COUNT(*) FROM {schema_name}.matcher_journal")
+                assert cur.fetchone()[0] == journal_count_before
     finally:
         with psycopg.connect(dsn, autocommit=True) as cleanup_conn:
             with cleanup_conn.cursor() as cur:

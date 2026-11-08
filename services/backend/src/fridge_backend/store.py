@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import json
 import logging
 from pathlib import Path
@@ -74,6 +74,85 @@ def format_iso_z(dt_val: datetime) -> str:
     else:
         dt_val = dt_val.astimezone(timezone.utc)
     return dt_val.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def format_trends_iso_z(dt_val: datetime) -> str:
+    """Formats datetime as UTC ISO-8601 string preserving up to microsecond resolution with 'Z'."""
+    if not isinstance(dt_val, datetime) or isinstance(dt_val, bool):
+        raise TypeError(f"Expected datetime instance, got {type(dt_val).__name__}")
+    if dt_val.tzinfo is None:
+        dt_val = dt_val.replace(tzinfo=timezone.utc)
+    else:
+        dt_val = dt_val.astimezone(timezone.utc)
+    if dt_val.microsecond % 1000 == 0:
+        return dt_val.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    return dt_val.isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+
+def validate_trends_range(start_ts: Any, end_ts: Any) -> tuple[datetime, datetime, str, str]:
+    """Validates offset-aware ISO-8601 timestamps for trends query, ensuring a half-open
+    [start_ts, end_ts) interval up to 366 days, real calendar dates, and returns UTC normalized bounds.
+    Preserves microsecond precision and rejects precision exceeding 6 fractional digits.
+    """
+    if not isinstance(start_ts, str) or isinstance(start_ts, bool):
+        raise ValueError(f"start_ts must be a string, got {type(start_ts).__name__}")
+    if not isinstance(end_ts, str) or isinstance(end_ts, bool):
+        raise ValueError(f"end_ts must be a string, got {type(end_ts).__name__}")
+    if any(c in start_ts for c in ("\r", "\n", "\0")):
+        raise ValueError("start_ts must not contain control characters")
+    if any(c in end_ts for c in ("\r", "\n", "\0")):
+        raise ValueError("end_ts must not contain control characters")
+
+    # Reject precision exceeding 6 fractional digits with either '.' or ',' separator
+    for name, ts_str in (("start_ts", start_ts), ("end_ts", end_ts)):
+        sep = "." if "." in ts_str else ("," if "," in ts_str else None)
+        if sep is not None:
+            frac = ts_str.split(sep, 1)[1]
+            digits = ""
+            for ch in frac:
+                if ch.isdigit():
+                    digits += ch
+                else:
+                    break
+            if len(digits) > 6:
+                raise ValueError(f"{name} precision exceeds maximum supported 6 fractional digits (microseconds)")
+
+    s_str = start_ts.strip()
+    if s_str.endswith("Z") or s_str.endswith("z"):
+        s_str = s_str[:-1] + "+00:00"
+    try:
+        start_dt = datetime.fromisoformat(s_str)
+    except Exception as exc:
+        raise ValueError(f"start_ts must be a valid ISO-8601 calendar date/time: {exc}") from exc
+
+    e_str = end_ts.strip()
+    if e_str.endswith("Z") or e_str.endswith("z"):
+        e_str = e_str[:-1] + "+00:00"
+    try:
+        end_dt = datetime.fromisoformat(e_str)
+    except Exception as exc:
+        raise ValueError(f"end_ts must be a valid ISO-8601 calendar date/time: {exc}") from exc
+
+    if start_dt.tzinfo is None:
+        raise ValueError("start_ts must be an offset-aware timestamp")
+    if end_dt.tzinfo is None:
+        raise ValueError("end_ts must be an offset-aware timestamp")
+
+    try:
+        start_utc = start_dt.astimezone(timezone.utc)
+        end_utc = end_dt.astimezone(timezone.utc)
+    except (OverflowError, ValueError) as exc:
+        raise ValueError(f"Timestamp timezone conversion overflow: {exc}") from exc
+
+    if start_utc >= end_utc:
+        raise ValueError("start_ts must be strictly before end_ts")
+
+    if end_utc - start_utc > timedelta(days=366):
+        raise ValueError("Time range cannot exceed 366 days")
+
+    start_iso = format_trends_iso_z(start_utc)
+    end_iso = format_trends_iso_z(end_utc)
+    return (start_utc, end_utc, start_iso, end_iso)
 
 
 @dataclass(frozen=True)
@@ -642,3 +721,88 @@ class PostgresStore:
                     "created_at": format_iso_z(row[2]),
                     "updated_at": format_iso_z(row[3]),
                 }
+
+    def get_trends(self, start_ts: str, end_ts: str, owner_id: str | None = None) -> dict:
+        """Returns aggregate metrics and top-20 wrong_owner pair rankings for [start_ts, end_ts).
+        Aggregates across all committed canonical fridge_events without artificial history limits.
+        Read-only SQL aggregate; no database writes or version guard mutations.
+        """
+        _, _, start_iso, end_iso = validate_trends_range(start_ts, end_ts)
+        valid_owner = validate_person_id(owner_id) if owner_id is not None else None
+
+        sql = (
+            f"SELECT "
+            f"payload->>'type' AS type, "
+            f"payload->>'status' AS status, "
+            f"payload->>'person_id' AS person_id, "
+            f"payload->>'owner_id' AS owner_id, "
+            f"COUNT(*) AS cnt "
+            f"FROM {self._schema_prefix}fridge_events "
+            f"WHERE (payload->>'ts')::timestamptz >= %s::timestamptz AND (payload->>'ts')::timestamptz < %s::timestamptz "
+        )
+        params: list[Any] = [start_iso, end_iso]
+        if valid_owner is not None:
+            sql += "AND payload->>'owner_id' = %s "
+            params.append(valid_owner)
+
+        sql += "GROUP BY payload->>'type', payload->>'status', payload->>'person_id', payload->>'owner_id'"
+
+        with self._conn.cursor() as cur:
+            cur.execute(sql, tuple(params))
+            rows = cur.fetchall()
+
+        event_count = 0
+        put_count = 0
+        take_count = 0
+        wrong_owner_count = 0
+        uncertain_count = 0
+        pair_counts: dict[tuple[str, str], int] = {}
+
+        for row in rows:
+            ev_type, status, pid, oid, cnt = row
+            cnt_int = int(cnt)
+            event_count += cnt_int
+            if ev_type == "PUT":
+                put_count += cnt_int
+            elif ev_type == "TAKE":
+                take_count += cnt_int
+
+            if status == "wrong_owner":
+                wrong_owner_count += cnt_int
+            elif status == "uncertain":
+                uncertain_count += cnt_int
+
+            if (
+                ev_type == "TAKE"
+                and status == "wrong_owner"
+                and pid is not None
+                and oid is not None
+                and pid != oid
+                and pid != ""
+                and oid != ""
+            ):
+                pair_key = (str(pid), str(oid))
+                pair_counts[pair_key] = pair_counts.get(pair_key, 0) + cnt_int
+
+        sorted_pairs = sorted(
+            pair_counts.items(),
+            key=lambda item: (-item[1], item[0][0], item[0][1]),
+        )
+        rankings_truncated = len(sorted_pairs) > 20
+        wrong_owner_by_pair = [
+            {"person_id": p, "owner_id": o, "count": c}
+            for (p, o), c in sorted_pairs[:20]
+        ]
+
+        return {
+            "start_ts": start_iso,
+            "end_ts": end_iso,
+            "owner_id": valid_owner,
+            "event_count": event_count,
+            "put_count": put_count,
+            "take_count": take_count,
+            "wrong_owner_count": wrong_owner_count,
+            "uncertain_count": uncertain_count,
+            "wrong_owner_by_pair": wrong_owner_by_pair,
+            "rankings_truncated": rankings_truncated,
+        }
