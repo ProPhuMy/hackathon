@@ -4,6 +4,36 @@ The CLI supports model smoke checks, enrollment/removal, single-face baseline
 recognition, empirical threshold calibration, and offline encounter evaluation. The event constructor and
 shared contract are unchanged.
 
+## Running the service and code layout
+
+Run every command from this folder (`services/person/`); default paths such as
+`models/det_10g.onnx` and the `../../contracts/` schema are relative to it.
+
+```bash
+uv run python -m src --help          # the console script `uv run fridge-person` is equivalent
+uv run python -m src <command> --help
+uv run pytest -q                     # no model weights or camera needed
+```
+
+```text
+src/
+  __main__.py          python -m src entry
+  events.py            sole person.seen event constructor (contracts/person.seen.schema.json)
+  capture.py           camera/file capture in a killable process, reconnect boundaries
+  storage.py           atomic JSON writes, SHA-256 file hashes, persistent segment counter
+  cli/                 argument parser (__init__.py) and one module per command:
+    run.py               enroll / run / remove (capture loop, policy gating, JSONL/Kafka dispatch)
+    calibrate.py         calibrate / evaluate (ArcFace baseline from encounter manifests)
+    scores.py            calibrate-scores / evaluate-scores (offline ensemble score files)
+    check_models.py, check_camera.py, check_encoders.py, check_detectors.py   smoke checks
+  vision/              face models: arcface.py (SCRFD + ArcFace), yolo5face.py, encoders.py and
+                       backbones.py (AdaFace/MagFace), detection.py (WBF fusion), boxes.py (IoU/NMS/letterbox)
+  identity/            recognition.py (evidence + Baseline), gallery.py, ensemble.py (fusion, conformal,
+                       EnsembleEngine), tracking.py (BoT-SORT-style tracker)
+  evaluation/          dataset.py (manifests, offline observations), calibration.py (baseline threshold search)
+tests/                 mirrors src/; shared fakes and the schema path live in tests/conftest.py
+```
+
 Verified development host: Apple M5 MacBook Air, 24 GB RAM, macOS 27.0.1.
 Installed uv and Python 3.11.18. Phase-0 runtime versions are pinned in
 pyproject.toml and uv.lock; run `uv sync` from this folder to reproduce the
@@ -24,7 +54,7 @@ revision. Place the SCRFD detector (`det_10g.onnx`) and ArcFace recognizer
 Use a local image of exactly one consenting participant:
 
 ```bash
-uv run fridge-person check-models \
+uv run python -m src check-models \
   --detector models/det_10g.onnx \
   --recognizer models/w600k_r50.onnx \
   --image models/face.jpg
@@ -39,6 +69,23 @@ Next gate: consenting enrollment/probe clips and a reachable camera for phase 1.
 person join policy still require coordination with Role 3. Follow the phased
 acceptance criteria in HUMAN_RECOGNITION_PLAN.md before adding ensemble layers.
 
+## NVIDIA GPU
+
+On Linux, `uv sync` installs the CUDA 13 build of ONNX Runtime (`onnxruntime-gpu`, with pip CUDA/cuDNN
+libraries); macOS keeps the CPU build. SCRFD and ArcFace then run on the GPU automatically, so no flag is
+needed. It needs an NVIDIA driver that supports CUDA 13 (`nvidia-smi` shows "CUDA Version: 13.x"). Without a
+usable GPU, ONNX Runtime prints an "EP Error" and falls back to CPU. `check-models` and `check-camera` report
+which `provider` actually ran.
+
+Measured 2026-11-08 on a GTX 1650 laptop (i5-11400H), with the same SCRFD + ArcFace weights:
+
+- `check-models` p50: 33 ms on GPU vs about 140 ms on CPU.
+- `check-camera` median: 21 ms on GPU vs 67 ms on CPU.
+- Evaluation metrics were identical on CPU and GPU, so a CPU-calibrated policy stays valid.
+
+The `run` loop samples a frame every 0.2 s, so CPU alone is enough for one person service. The GPU leaves
+headroom when the item service shares the machine.
+
 ## Single-face baseline CLI
 
 Implemented: bounded capture in a separate process, single-face enrollment,
@@ -47,10 +94,10 @@ segment IDs, policy-gated JSONL and Kafka dispatch. Baseline only; this is not
 the five-network target. Run commands from this service folder:
 
 ```bash
-uv run fridge-person enroll --person-id p_01 --session-id enroll-p01-01 --source 0
-uv run fridge-person remove --person-id p_01
-uv run fridge-person run --source 0 --policy models/baseline-policy.json --dry-run
-uv run fridge-person run --source 0 --policy models/baseline-policy.json --broker localhost:19092
+uv run python -m src enroll --person-id p_01 --session-id enroll-p01-01 --source 0
+uv run python -m src remove --person-id p_01
+uv run python -m src run --source 0 --policy models/baseline-policy.json --dry-run
+uv run python -m src run --source 0 --policy models/baseline-policy.json --broker localhost:19092
 ```
 
 Bare decimal sources are webcams; prefix numeric file names with `./`.
@@ -85,8 +132,8 @@ encounters with dishonest metadata. Live enrollment records the supplied session
 ID; include the same ID for all recordings belonging to that encounter.
 
 ```bash
-uv run fridge-person calibrate --manifest models/development.csv --output models/baseline-policy.json
-uv run fridge-person evaluate --manifest models/test.csv --policy models/baseline-policy.json --output models/metrics.json
+uv run python -m src calibrate --manifest models/development.csv --output models/baseline-policy.json
+uv run python -m src evaluate --manifest models/test.csv --policy models/baseline-policy.json --output models/metrics.json
 ```
 
 Test rows use `split=test`. Calibration searches a fixed coarse threshold grid
@@ -146,7 +193,7 @@ Run from a camera-authorized Terminal (the agent's subprocess may have separate
 macOS camera permissions):
 
 ```bash
-.venv/bin/fridge-person check-camera --source 0 --duration 15
+.venv/bin/python -m src check-camera --source 0 --duration 15
 ```
 
 The command reports aggregate decoded/usable/stale-frame counts, reconnects and
@@ -225,8 +272,8 @@ The existing ArcFace `run`, `calibrate`, and `evaluate` commands are unchanged.
 New score-only commands implement the selected ensemble's statistical layer:
 
 ```bash
-uv run fridge-person calibrate-scores --development models/scores/development.json --conformal models/scores/conformal.json --output models/ensemble-policy.json
-uv run fridge-person evaluate-scores --scores models/scores/test.json --policy models/ensemble-policy.json --output models/ensemble-metrics.json
+uv run python -m src calibrate-scores --development models/scores/development.json --conformal models/scores/conformal.json --output models/ensemble-policy.json
+uv run python -m src evaluate-scores --scores models/scores/test.json --policy models/ensemble-policy.json --output models/ensemble-metrics.json
 ```
 
 Each input JSON has `binding`, `prefix_s`, and `encounters`. `binding` is a 64-digit
@@ -264,7 +311,7 @@ and denominators, including known coverage BEFORE extra rejection gates. Do not
 create live policies from synthetic scores. The new artifact is intentionally
 separate from the runnable ArcFace baseline policy.
 
-`detection.fuse_faces` also implements published Weighted Boxes Fusion for SCRFD
+`fuse_faces` (`src/vision/detection.py`) also implements published Weighted Boxes Fusion for SCRFD
 and YOLO5Face boxes. It preserves single-detector faces, clips coordinates, keeps
 five-point landmarks from one valid source (SCRFD wins score ties), and withholds
 landmarks if source ownership is ambiguous. Invalid landmarks do not prevent
@@ -288,7 +335,7 @@ real-world accuracy remain unverified.
 checkpoints on CPU, using the same validated SCRFD five-point crop as ArcFace:
 
 ```bash
-uv run fridge-person check-encoders --image models/face.jpg
+uv run python -m src check-encoders --image models/face.jpg
 ```
 
 Explicit checkpoint overrides are `--adaface` and `--magface`. Missing or
@@ -337,12 +384,12 @@ ensemble score artifacts before it can publish named ensemble events.
 ## Offline dual-detector diagnostic CLI (SCRFD + YOLO5Face + WBF)
 
 `check-detectors` runs SCRFD and YOLO5Face on the same local image, fuses their candidate
-boxes using `detection.fuse_faces`, and reports aggregate detection counts, source
+boxes using `fuse_faces` (`src/vision/detection.py`), and reports aggregate detection counts, source
 attributions, and timing diagnostics without printing or storing pixels, landmarks, or
 embeddings:
 
 ```bash
-uv run fridge-person check-detectors \
+uv run python -m src check-detectors \
   --image models/face.jpg \
   --scrfd models/det_10g.onnx \
   --yolo5face models/yolov5s-face.onnx
@@ -385,7 +432,7 @@ Supported ONNX graph layout:
   and five landmarks are inverse-projected from letterbox coordinates to original image
   space, clipped to original dimensions, and filtered by greedy IoU NMS (default 0.5)
   and confidence threshold (default 0.3).
-- Weighted Boxes Fusion: `detection.fuse_faces` blends overlapping boxes (`iou_thr=0.55`)
+- Weighted Boxes Fusion: `fuse_faces` (`src/vision/detection.py`) blends overlapping boxes (`iou_thr=0.55`)
   with equal detector weights, while conservatively preserving source-owned landmarks from
   the highest-scoring detection (SCRFD preferred on ties). Single-detector faces survive.
 
@@ -399,8 +446,8 @@ Supported ONNX graph layout:
   confidence math, landmark-box pairing, invalid layouts, and WBF fusion.
 - No real-weight smoke test is claimed for YOLO5Face until a verified exported artifact is
   provided locally.
-- Full five-network runtime integration is now implemented:
+- Five-network components are implemented and unit-tested, but **not wired into `run`**. The live `run` command uses the SCRFD + ArcFace baseline (`Vision.single_face`, `models/baseline-policy.json`); do not present its output as the full ensemble. Components available for integration:
   - `DualGallery` ensures strictly separate template stores and independent coordinate spaces for ArcFace and AdaFace without vector-space averaging.
   - `FaceTracker` and `FaceTrack` implement BoT-SORT-style motion and appearance tracking using Kalman filters, IoU distance, and ArcFace appearance association, enforcing appearance continuity (rejecting cosine < 0.3) and per-track temporal evidence windows.
   - MagFace raw norm quantiles provide quality weighting for robust spherical temporal aggregation with angular outlier rejection.
-  - `runtime.py` handles both baseline and calibrated conformal ensemble policies, outputting valid `person.seen` events with calibrated confidence and class-conditional conformal candidate evaluation.
+  - `src/cli/run.py` has an ensemble branch for conformal policies. Each aligned face crop is encoded by both ArcFace and AdaFace (`--adaface`/`--magface` checkpoints), and each gallery is scored only with its own encoder's vector. It requires a separate AdaFace gallery (`--ada-gallery`, default `gallery_adaface.json` next to `--gallery`) whose `model` field equals the full `FaceEncoders` signature (AdaFace hash, MagFace hash and preprocessing tag; no command enrolls such a gallery yet), and the policy must bind it with `ada_gallery` (gallery fingerprint) and `ada_model` (that signature) next to `gallery`/`model`; its identities must match both galleries. Evidence is averaged per encoder space and the 0.3 continuity gate is checked in each space, so one encoder seeing a different face restarts the evidence. MagFace is loaded (it is part of the signature) but its quality norm is not used for weighting yet. A `calibrate-scores` policy still lacks these binding keys, so the branch is only reachable with a policy completed by hand.

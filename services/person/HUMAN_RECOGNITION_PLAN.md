@@ -20,7 +20,7 @@ Read these alongside this brief:
 - [Repository ownership and event rules](../../README.md).
 - [Current English project overview](../../docs/Fridge%20Tracker%20%E2%80%93%20Project%20Overview.md).
 - [Person event schema](../../contracts/person.seen.schema.json).
-- [Existing event builder](src/fridge_person/events.py) and [contract tests](tests/test_contract.py).
+- [Existing event builder](src/events.py) and [contract tests](tests/test_events.py).
 
 All four existing Markdown files in the supplied folder were reviewed: the Vietnamese overview above the repository, its English copy in `docs/`, the repository README, and the dashboard README. The Vietnamese copy has older role assignments and an event example without `event_id`; follow the repository README and JSON Schemas for implementation. The dashboard README describes a Vite starter, not a completed registration interface.
 
@@ -236,7 +236,7 @@ Other failures, including low quality, near-tied identities, multiple conformal 
 
 ## 6. Preserve the exact event contract
 
-Build every observation through existing `fridge_person.events.person_seen(...)`. Pass the evidence frame's preserved UTC `ts`; omitting it would stamp publication time. The example below is illustrative, not measured output:
+Build every observation through existing `src.events.person_seen(...)`. Pass the evidence frame's preserved UTC `ts`; omitting it would stamp publication time. The example below is illustrative, not measured output:
 
 ```json
 {
@@ -261,7 +261,7 @@ Service-level `track_id` values must not collide on tracker resets/reconnects. U
 
 ## 7. Implementation structure and dependencies
 
-Keep the existing `fridge-person = fridge_person:main` entry point. Turn `__init__.py:main` into a thin delegation to the CLI. Preserve `events.py` as the sole event constructor. A fitting module split is:
+Keep the `fridge-person` console script (now `src.cli:main`; the package was `fridge_person` at research time). Preserve `events.py` as the sole event constructor. The implemented layout is documented in SETUP.md ("Running the service and code layout"); the original planning sketch was:
 
 ```text
 services/person/
