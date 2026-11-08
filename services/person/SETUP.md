@@ -196,3 +196,25 @@ clip. Raw videos and per-frame host receipt timestamps remain under ignored
 43 automated tests passed again. Calibration still requires independent stranger
 encounters, and final accuracy requires untouched test encounters. No thresholds
 were fitted from this one known-person clip. Capture processes have exited.
+
+## Initial baseline calibration and held-out attempt
+
+A consenting unenrolled participant's development clip was collected (40 decoded
+frames). The frozen baseline was fitted on one known and one stranger encounter:
+1/1 known encounter correctly named, 1/1 stranger encounter operationally rejected,
+with zero observed false names. These two development encounters cannot establish
+deployment accuracy or unknown-person error rates.
+
+Concrete CLI replay produced 12 schema-valid named events for the known clip and
+one schema-valid null-identity event for the stranger clip. Original replay UTC
+timestamps were preserved; concurrently running replays had no segment/event ID
+collisions. Runtime policy and biometric clips remain ignored local artifacts.
+
+A subsequent clip labelled as a known-person held-out test contained 41 usable
+observations but emitted no accepted names. Its raw cosine similarities were
+0.089–0.222, substantially below the clean known development encounter. Participant
+identity for that clip needs user confirmation; preserve its supplied label and
+provisional abstention result until confirmed. Do not lower thresholds or relabel
+it to manufacture a passing test. The stranger held-out capture was rejected for
+multiple detected faces and its partial clip was discarded. No complete held-out
+known/stranger accuracy result is available. All camera processes have exited.
