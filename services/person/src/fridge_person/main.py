@@ -130,10 +130,22 @@ def main():
     live.add_argument('--duration', type=float, default=15.)
     live.add_argument('--detector', type=Path, default=Path('models/det_10g.onnx'))
     live.add_argument('--recognizer', type=Path, default=Path('models/w600k_r50.onnx'))
+    for command in ('calibrate-scores', 'evaluate-scores'):
+        sub = commands.add_parser(command, help='Offline ensemble score calibration; no model inference')
+        sub.add_argument('--output', type=Path, required=True)
+        if command == 'calibrate-scores':
+            sub.add_argument('--development', type=Path, required=True)
+            sub.add_argument('--conformal', type=Path, required=True)
+        else:
+            sub.add_argument('--scores', type=Path, required=True)
+            sub.add_argument('--policy', type=Path, required=True)
     args = parser.parse_args()
     try:
         if args.command == 'check-models':
             check_models(args)
+        elif args.command in ('calibrate-scores', 'evaluate-scores'):
+            from .ensemble import execute
+            execute(args)
         elif args.command == 'check-camera':
             check_camera(args)
         elif args.command in ('calibrate', 'evaluate'):

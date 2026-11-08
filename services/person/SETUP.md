@@ -218,3 +218,66 @@ provisional abstention result until confirmed. Do not lower thresholds or relabe
 it to manufacture a passing test. The stranger held-out capture was rejected for
 multiple detected faces and its partial clip was discarded. No complete held-out
 known/stranger accuracy result is available. All camera processes have exited.
+
+## Offline ensemble tools (no additional recording required)
+
+The existing ArcFace `run`, `calibrate`, and `evaluate` commands are unchanged.
+New score-only commands implement the selected ensemble's statistical layer:
+
+```bash
+uv run fridge-person calibrate-scores --development models/scores/development.json --conformal models/scores/conformal.json --output models/ensemble-policy.json
+uv run fridge-person evaluate-scores --scores models/scores/test.json --policy models/ensemble-policy.json --output models/ensemble-metrics.json
+```
+
+Each input JSON has `binding`, `prefix_s`, and `encounters`. `binding` is a 64-digit
+lowercase SHA-256 fingerprint of the producer's exact model/preprocessing/gallery
+configuration, identical across the three splits. The tool checks equality; it
+does not load or attest to the models that produced scores. `prefix_s` must be
+1.0: one predetermined one-second observation prefix per independent encounter,
+using the same usable-observation and temporal gates in every split.
+
+Each encounter contains:
+
+- `session_id`: unique independent encounter ID.
+- `source_sha256`: original recording file hash, unique within and across splits.
+- `person_id`: an enrolled ID, or null for an unregistered participant.
+- `arcface` and `adaface`: separate dictionaries mapping every enrolled ID to
+  that encoder's finite cosine score in [-1,1]. Both must have identical keys.
+
+Development must include every enrolled identity and strangers. L2 logistic
+regression fits candidate-level fusion, with every enrolled candidate included
+for every encounter. Absolute acceptance/rejection and runner-up gates are fitted
+on development before reading conformal scores. One-person galleries use a
+separately development-fitted absolute threshold and no invented runner-up.
+Conformal input uses known identities only and at least nine independently
+recorded encounters for EVERY enrolled class. Missing classes/counts fail clearly.
+Candidate p-values use the finite-sample greater-or-equal ranking and strict
+`p > 0.10` membership. Only an accepted singleton names a person; multiple/empty
+sets abstain unless low support and an empty set justify operational stranger
+rejection. Confidence is the logistic compatibility score, never a p-value.
+
+Tests use synthetic score arrays. This is not proof that real neural scores are
+calibrated, encounters are exchangeable, unknown identities are rejected, or
+continuous-video decisions have conformal coverage. The tool cannot establish
+physical recording independence from metadata. Evaluation reports raw counts
+and denominators, including known coverage BEFORE extra rejection gates. Do not
+create live policies from synthetic scores. The new artifact is intentionally
+separate from the runnable ArcFace baseline policy.
+
+`detection.fuse_faces` also implements published Weighted Boxes Fusion for SCRFD
+and YOLO5Face boxes. It preserves single-detector faces, clips coordinates, keeps
+five-point landmarks from one valid source (SCRFD wins score ties), and withholds
+landmarks if source ownership is ambiguous. Invalid landmarks do not prevent
+geometry-only output. This utility is tested with synthetic boxes; the second
+neural detector is not yet integrated. AdaFace, MagFace, YOLO5Face and BoT-SORT
+model/runtime integration remains incomplete; no full ensemble run is claimed.
+
+Offline-layer verification: 65 automated tests passed, including statistical
+ranking/ties, class-count failures, independent split checks, malformed/truncated
+policy provenance, artifact round-trips, source-landmark ownership, and all prior
+baseline checks. An independent read-only code review found an artifact-validation
+gap; its reproduced failures were fixed and the fix re-reviewed. Existing-clip
+baseline replay still produced 12 schema-valid named observations without opening
+a camera. Source compilation and source-distribution/wheel builds passed. No new
+camera sessions were used for this work. Runtime neural ensemble integration and
+real-world accuracy remain unverified.
