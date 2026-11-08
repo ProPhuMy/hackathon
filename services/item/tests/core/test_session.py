@@ -58,8 +58,19 @@ def test_take(line):
     assert trip.type == "TAKE"
     assert trip.item.label == "coke"
     assert trip.item.id == 20
-    assert trip.ts == "2026-11-07T20:00:03.000Z"
+    # stamped at the hand going in, while the face is still visible to the person camera
+    assert trip.ts == "2026-11-07T20:00:02.000Z"
     assert trip.confidence == 0.85
+
+
+def test_take_after_long_rummage_keeps_in_time(line):
+    session = DoorSession(line)
+    session.update([hand(1, 100.0, 50.0)], ts="t0")
+    session.update([hand(1, 100.0, 150.0)], ts="t_in")  # empty hand goes in
+    for i in range(5):  # several seconds inside the fridge
+        session.update([hand(1, 100.0, 160.0)], ts=f"t_inside_{i}")
+    res = session.update([hand(1, 100.0, 50.0), item(20, 100.0, 50.0)], ts="t_out")
+    assert [(t.type, t.ts) for t in res] == [("TAKE", "t_in")]
 
 
 def test_touch_no_event(line):

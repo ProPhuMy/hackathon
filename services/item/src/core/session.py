@@ -54,11 +54,11 @@ class Trip:
         return _same_crop(self.crop, other.crop)
 
 
-def _trip(type: Literal["PUT", "TAKE"], crossing: Crossing) -> Trip:
+def _trip(type: Literal["PUT", "TAKE"], crossing: Crossing, ts: str | None = None) -> Trip:
     """Trip for the crossing that carried the item; confidence = min(hand, item)."""
     held = crossing.held
     conf = min(crossing.hand.conf, held.conf) if crossing.hand is not None else held.conf
-    return Trip(type=type, item=held, ts=crossing.ts, crop=crossing.crop, confidence=conf)
+    return Trip(type=type, item=held, ts=ts or crossing.ts, crop=crossing.crop, confidence=conf)
 
 
 class DoorSession:
@@ -160,7 +160,9 @@ class DoorSession:
         if c_in.held is not None and c_out.held is None:
             return _trip("PUT", c_in)
         if c_in.held is None and c_out.held is not None:
-            return _trip("TAKE", c_out)
+            # ts = hand going in: the person still faces the face camera then; while rummaging
+            # they turn away, and the backend can only match a face seen within ~3 s
+            return _trip("TAKE", c_out, ts=c_in.ts)
         return None
 
     def close(self) -> list[Trip]:
