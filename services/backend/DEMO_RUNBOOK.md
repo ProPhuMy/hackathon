@@ -1,6 +1,8 @@
 # Demo runbook: run the whole Fridge Tracker chain
 
-Start order and exact commands for demo day. Each command was checked against the service's CLI on `main` (`0c1ce47`, 2026-11-08). The full chain has not been run end to end yet; step 10 is that test.
+Start order and exact commands for demo day. Each command was checked against the service's CLI on `main` (`0c1ce47`, 2026-11-08).
+
+Verified on 2026-11-08 with the synthetic scenario (no cameras): Redpanda + Postgres from Compose, backend, `tools/fake_events.py`, API (PUT p_01 ok, TAKE p_02 wrong_owner, one alert, inventory cleared), and the dashboard in a real browser through both the Vite dev proxy and the production nginx image (LIVE status, live inventory, alert card, roster, and an SSE update without reload). The camera services (steps 7 and 8) have not been run in this chain yet; step 10 is that test.
 
 ## Machines
 
@@ -106,7 +108,23 @@ uv run python -m src run --source <phone1-url-or-0> --policy models/baseline-pol
 
 ## 9. Start the dashboard (Mac)
 
-Follow `dashboard/README.md` (`npm ci`, `npm run dev`). The dashboard must point at the backend on port 8000; the live API connection is Role 4's work in progress.
+```bash
+cd dashboard
+npm ci
+npm run dev        # http://localhost:5173 ; /api is proxied to the backend on localhost:8000
+```
+
+Check that the status at the top left says `LIVE`. `LOCAL DEMO` means the dashboard could not reach the backend at page load and is showing demo data; it retries every 5 s and switches to `LIVE` on its own. `LIVE · RECONNECTING` means the backend dropped after a live load; the last data stays on screen.
+
+Production alternative (same result, nginx instead of the Vite dev server):
+
+```bash
+docker build -t fridge-dashboard:dev --build-arg VITE_API_BASE=/api dashboard
+docker run --rm -p 127.0.0.1:8081:8080 -e BACKEND_HOST=host.docker.internal -e BACKEND_PORT=8000 fridge-dashboard:dev
+# open http://127.0.0.1:8081
+```
+
+People shown on the dashboard come from step 5. Items get a fridge slot by label (carton, box, jar, bottle, fruit); other labels show as a placeholder.
 
 ## 10. Smoke test
 
@@ -147,5 +165,7 @@ Say on stage that this is synthetic data.
 | Wrong person credited on every event | Clock skew between the Mac and the GPU server | Step 1 |
 | Backend exits at start with a version error | Old journal in Postgres | See step 3 |
 | Postgres container fails on port 5432 | A native Postgres is running on the Mac | Stop it (step 0.4) |
+| Dashboard says `LOCAL DEMO` | Backend not reachable on port 8000 when the page loaded | Start the backend (step 3); the page switches to `LIVE` within 5 s |
+| Old test events show up in the dashboard history | The input topics still hold events from an earlier run, and a new database replays them from the start | Before the demo: `docker compose -f infra/docker-compose.yml exec redpanda rpk topic delete person.seen item.event fridge.event`, then recreate them (step 2) and reset the database (step 3) |
 
 The item service pairs door crossings in order, so it assumes one person at the fridge at a time. Do the PUT and TAKE as two separate visits.
