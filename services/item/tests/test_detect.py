@@ -397,3 +397,34 @@ def test_run_command_selects_gdino(tmp_path: Path, monkeypatch):
     mock_gdino_cls.assert_called_once_with(prompts=["milk"], hand_label="hand")
 
 
+def test_gdino_detector_bytetrack_thresholds(monkeypatch):
+    import sys
+
+    recorded_configs = []
+
+    class FakeByteTrack:
+        def __init__(self, *args, **kwargs):
+            recorded_configs.append((args, kwargs))
+
+    monkeypatch.setattr("boxmot.ByteTrack", FakeByteTrack)
+
+    mock_transformers = MagicMock()
+    mock_model = MagicMock()
+    mock_model.to.return_value = mock_model
+    mock_transformers.AutoProcessor.from_pretrained.return_value = MagicMock()
+    mock_transformers.AutoModelForZeroShotObjectDetection.from_pretrained.return_value = (
+        mock_model
+    )
+    monkeypatch.setitem(sys.modules, "transformers", mock_transformers)
+
+    GDinoDetector(prompts=["milk"], box_threshold=0.3)
+
+    assert len(recorded_configs) == 1
+    args, kwargs = recorded_configs[0]
+    config = args[0] if args else kwargs.get("config")
+    assert config is not None
+    assert config.min_conf == 0.3
+    assert config.track_thresh == 0.3
+
+
+

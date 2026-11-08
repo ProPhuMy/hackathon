@@ -197,7 +197,11 @@ class GDinoDetector:
             self.device
         )
         self.model.eval()
-        self.tracker = boxmot.ByteTrack()
+        bt_config = boxmot.ByteTrackConfig(
+            min_conf=self.box_threshold,
+            track_thresh=self.box_threshold,
+        )
+        self.tracker = boxmot.ByteTrack(bt_config)
 
     def __call__(self, frame: np.ndarray) -> list[Track]:
         if frame is None or frame.size == 0 or not self.prompts:
