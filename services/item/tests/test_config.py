@@ -128,6 +128,57 @@ def test_load_default_margin_and_prompts(tmp_path: Path):
     assert loaded.hand_label == "hand"
 
 
+def test_calibrate_invalid_roi_raises(tmp_path: Path):
+    out_file = tmp_path / "config.json"
+    dummy_frame = np.full((100, 100, 3), 40, dtype=np.uint8)
+
+    with patch("fridge_item.config.iter_frames", return_value=iter([(dummy_frame, "ts")])), \
+         patch("cv2.selectROI", return_value=(0, 0, 0, 0)), \
+         patch("cv2.namedWindow"), \
+         patch("cv2.imshow"), \
+         patch("cv2.destroyWindow"), \
+         patch("cv2.setMouseCallback"), \
+         patch("cv2.waitKey", return_value=27):
+        with pytest.raises(ValueError, match="width and height must be positive"):
+            calibrate("dummy_source", out_file)
+
+    assert not out_file.exists()
+
+
+def test_calibrate_one_frame_source_exhaustion_on_open(tmp_path: Path):
+    out_file = tmp_path / "config.json"
+    dummy_frame = np.full((100, 100, 3), 50, dtype=np.uint8)
+
+    # Only one frame in the entire source
+    frames = [(dummy_frame, "2026-11-07T19:40:00.000Z")]
+
+    mouse_callbacks = []
+
+    def fake_set_mouse_callback(winname, callback, param=None):
+        mouse_callbacks.append(callback)
+
+    def fake_wait_key(delay):
+        if mouse_callbacks:
+            cb = mouse_callbacks[0]
+            cb(cv2.EVENT_LBUTTONDOWN, 15, 25, 0, None)
+            cb(cv2.EVENT_LBUTTONDOWN, 85, 25, 0, None)
+            cb(cv2.EVENT_LBUTTONDOWN, 50, 70, 0, None)
+        return 13
+
+    with patch("fridge_item.config.iter_frames", return_value=iter(frames)), \
+         patch("cv2.selectROI", return_value=(10, 20, 30, 40)), \
+         patch("cv2.namedWindow"), \
+         patch("cv2.imshow"), \
+         patch("cv2.destroyWindow"), \
+         patch("cv2.destroyAllWindows"), \
+         patch("cv2.setMouseCallback", side_effect=fake_set_mouse_callback), \
+         patch("cv2.waitKey", side_effect=fake_wait_key):
+        with pytest.raises(ValueError, match="exhausted"):
+            calibrate("dummy_source", out_file)
+
+    assert not out_file.exists()
+
+
 def test_calibrate_logic(tmp_path: Path):
     out_file = tmp_path / "config.json"
     dummy_frame = np.full((100, 100, 3), 40, dtype=np.uint8)

@@ -87,6 +87,8 @@ def calibrate(source: str, out_path: Path | str = "config.json") -> Config:
     )
     cv2.destroyWindow("Select Opening Region")
     roi = (int(roi_raw[0]), int(roi_raw[1]), int(roi_raw[2]), int(roi_raw[3]))
+    if roi[2] <= 0 or roi[3] <= 0:
+        raise ValueError(f"Invalid ROI {roi}: width and height must be positive")
 
     points: list[Point] = []
     window_edge = "Click 2 front-edge points, then 1 inside point"
@@ -119,10 +121,10 @@ def calibrate(source: str, out_path: Path | str = "config.json") -> Config:
 
     rx, ry, rw, rh = roi
 
-    def sample_brightness(prompt_text: str) -> float:
+    def sample_brightness(prompt_text: str, initial_frame: np.ndarray | None = None) -> float:
         window_sample = "Sample Brightness"
         cv2.namedWindow(window_sample)
-        last_frame = first_frame
+        last_frame = initial_frame
         try:
             for frame, _ in frames:
                 last_frame = frame
@@ -142,6 +144,8 @@ def calibrate(source: str, out_path: Path | str = "config.json") -> Config:
                 if k != -1:
                     break
             else:
+                if last_frame is None:
+                    raise ValueError(f"Frame source exhausted before sampling: {prompt_text}")
                 disp = last_frame.copy()
                 cv2.rectangle(disp, (rx, ry), (rx + rw, ry + rh), (0, 255, 255), 2)
                 cv2.putText(
@@ -158,12 +162,15 @@ def calibrate(source: str, out_path: Path | str = "config.json") -> Config:
         finally:
             cv2.destroyWindow(window_sample)
 
+        if last_frame is None:
+            raise ValueError(f"Frame source exhausted before sampling: {prompt_text}")
+
         roi_crop = last_frame[ry : ry + rh, rx : rx + rw]
         return float(np.mean(roi_crop))
 
     try:
-        c = sample_brightness("Door CLOSED - press any key to sample")
-        o = sample_brightness("Door OPEN - press any key to sample")
+        c = sample_brightness("Door CLOSED - press any key to sample", initial_frame=first_frame)
+        o = sample_brightness("Door OPEN - press any key to sample", initial_frame=None)
     finally:
         cv2.destroyAllWindows()
 
