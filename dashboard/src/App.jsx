@@ -1,8 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
 import './App.css'
-import { SHELVES } from './fridgeMotion.mjs'
-import { resolveItemBySlot } from './itemMapping.js'
 const Fridge3D = lazy(() => import('./Fridge3D.jsx'))
 
 const inventory = [
@@ -43,24 +41,23 @@ function Modal({ title, onClose, children }) {
 }
 
 function App() {
-  const [open, setOpen] = useState(false)
-  const [phase, setPhase] = useState('outside')
-  const [shelf, setShelf] = useState(0)
+  const [travel, setTravel] = useState(false)
+  const [phase, setPhase] = useState('idle')
   const [modelReady, setModelReady] = useState(false)
   const [modelFailed, setModelFailed] = useState(false)
   const enterRef = useRef(null)
-  const exitRef = useRef(null)
-  const wheelTime = useRef(0)
-  const wasInside = useRef(false)
-  const immersive = open || phase !== 'outside'
+  const returnRef = useRef(null)
+  const wasTravelling = useRef(false)
+  const immersive = travel || phase !== 'idle'
   const onModelReady = useCallback(() => setModelReady(true), [])
-  const onModelFailure = useCallback(() => { setModelFailed(true); setOpen(false); setPhase('outside') }, [])
-  const enterFridge = useCallback(() => { setShelf(0); setOpen(true) }, [])
+  const onModelFailure = useCallback(() => { setModelFailed(true); setTravel(false); setPhase('idle') }, [])
+  const startTravel = useCallback(() => setTravel(true), [])
   const go = useNavigate()
   const pathname = useRouterState({ select: state => state.location.pathname })
   const sectionNames = { '/inventory': 'Inventory', '/history': 'History', '/alerts': 'Alerts', '/people': 'People' }
   const panel = sectionNames[pathname] || (pathname.startsWith('/items/') ? 'Item details' : pathname.startsWith('/events/') ? 'Event details' : null)
   const selected = panel === 'Item details' ? inventory.find(i => i.id === pathname.split('/')[2]) : panel === 'Event details' ? events.find(e => e.time.replace(':', '') === pathname.split('/')[2]) : null
+  const selectedId = pathname.startsWith('/items/') ? pathname.split('/')[2] : null
   function setPanel(value) { return go({ to: value ? '/' + value.toLowerCase() : '/' }) }
   const [query, setQuery] = useState('')
   const [owner, setOwner] = useState('Everyone')
@@ -74,59 +71,112 @@ function App() {
   function inspect(item) {
     go({ to: '/items/$itemId', params: { itemId: item.id } })
   }
-  
+
   useEffect(() => {
-    if (open) { wasInside.current = true; exitRef.current?.focus({ preventScroll: true }) }
-    else if (phase === 'outside' && wasInside.current) {
-      wasInside.current = false; enterRef.current?.focus({ preventScroll: true })
+    if (travel) {
+      wasTravelling.current = true
+      returnRef.current?.focus({ preventScroll: true })
     }
-  }, [open, phase])
+  }, [travel])
+
+  useEffect(() => {
+    if (phase === 'floating') {
+      const active = document.activeElement
+      if (!active || active === document.body || !active.isConnected) {
+        returnRef.current?.focus({ preventScroll: true })
+      }
+    } else if (phase === 'idle' && wasTravelling.current) {
+      wasTravelling.current = false
+      enterRef.current?.focus({ preventScroll: true })
+    }
+  }, [phase])
+
   useEffect(() => {
     const onKey = event => {
-      if (panel || !open) return
-      if (event.key === 'Escape') { event.preventDefault(); setOpen(false) }
-      if (phase === 'inside' && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
-        event.preventDefault()
-        setShelf(value => Math.max(0, Math.min(SHELVES.length - 1, value + (event.key === 'ArrowDown' ? 1 : -1))))
-      }
+      if (panel || !travel) return
+      if (event.key === 'Escape') { event.preventDefault(); setTravel(false) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open, panel, phase])
-  function browseWithWheel(event) {
-    if (!open || phase !== 'inside' || panel || Math.abs(event.deltaY) < 12 || performance.now() - wheelTime.current < 850) return
-    wheelTime.current = performance.now()
-    setShelf(value => Math.max(0, Math.min(SHELVES.length - 1, value + Math.sign(event.deltaY))))
-  }
-  return <div className={`app ${immersive ? 'is-immersive' : ''} ${phase === 'inside' && open ? 'is-inside' : ''}`} onWheel={browseWithWheel}>
+  }, [travel, panel])
+
+  return <div className={`app ${immersive ? 'is-immersive' : ''}`}>
     <section className="fridge-scene" aria-label="Interactive mini fridge">
-      <Suspense fallback={null}><Fridge3D enter={open} shelf={shelf} onEnter={enterFridge} onInspect={index => { const item = resolveItemBySlot(inventory, index); if (item) inspect(item); }} onPhase={setPhase} onReady={onModelReady} onFailure={onModelFailure}/></Suspense>
+      <Suspense fallback={null}>
+        <Fridge3D
+          travel={travel}
+          items={inventory}
+          selectedId={selectedId}
+          onTravel={startTravel}
+          onInspect={id => go({ to: '/items/$itemId', params: { itemId: id } })}
+          onPhase={setPhase}
+          onReady={onModelReady}
+          onFailure={onModelFailure}
+        />
+      </Suspense>
     </section>
     <header className="site-header outside-ui" inert={immersive}>
-      <a href="#" className="wordmark" onClick={e => { e.preventDefault(); closePanel(); setOpen(false) }} aria-label="Fridge home">fridge<span>—</span></a>
+      <a href="#" className="wordmark" onClick={e => { e.preventDefault(); closePanel(); setTravel(false) }} aria-label="Fridge home">fridge<span>—</span></a>
       <nav aria-label="Main navigation">{['Inventory', 'History', 'Alerts', 'People'].map((name, i) => <Link key={name} to={'/' + name.toLowerCase()} aria-haspopup="dialog"><span className="nav-index">0{i + 1}</span>{name}{name === 'Alerts' && <span className="alert-count">2</span>}</Link>)}</nav>
     </header>
     <div className="system-status outside-ui" inert={immersive}><span className="status-dot"/> LOCAL DEMO<span className="status-caption">ONE FRIDGE. FOUR ROOMMATES.</span></div>
     <main className="room">
-      <div className="room-line room-line-left outside-ui"/><div className="room-line room-line-right outside-ui"/>
       <section className="intro outside-ui" aria-label="Welcome" inert={immersive}>
-        <span className="eyebrow">A SHARED FRIDGE, WITH RECEIPTS.</span>
+        <span className="eyebrow">A SHARED FRIDGE, IN ORBIT.</span>
         <h1>CLICK TO<br/>INTERACT.</h1>
-        <p>Good food. Questionable roommates.<br/>We keep track of both.</p>
-        <button ref={enterRef} className="interact-link" onClick={modelFailed ? () => navigate('Inventory') : enterFridge} disabled={!modelReady && !modelFailed} aria-expanded={immersive} aria-controls="fridge-interior">{modelFailed ? 'Browse inventory' : modelReady ? 'Open the fridge' : 'Preparing your fridge…'} <span aria-hidden="true">↗</span></button>
+        <p>Good food. Questionable roommates.<br/>Somewhere in deep space, we keep track of both.</p>
+        <button
+          ref={enterRef}
+          className="interact-link"
+          onClick={modelFailed ? () => navigate('Inventory') : startTravel}
+          disabled={!modelReady && !modelFailed}
+          aria-expanded={immersive}
+          aria-controls="space-journey"
+        >
+          {modelFailed ? (
+            'Browse inventory'
+          ) : (
+            <>
+              {modelReady ? 'Open the wormhole' : 'Charging the wormhole…'}{' '}
+              <span aria-hidden="true">↗</span>
+            </>
+          )}
+        </button>
         {modelFailed && <p role="status">3D preview unavailable. Your inventory is still here.</p>}
       </section>
-      <div className="fridge-caption outside-ui" aria-hidden={immersive}><span className="status-dot"/>READY WHEN YOU ARE<span>FRIDGE / 001</span></div>
-      <div className="side-note outside-ui" aria-hidden={immersive}>NO TAGS. NO GUESSWORK. JUST YOUR FRIDGE.</div>
+      <div className="fridge-caption outside-ui" aria-hidden={immersive}><span className="status-dot"/>DRIFTING. READY WHEN YOU ARE.<span>FRIDGE / 001</span></div>
+      <div className="side-note outside-ui" aria-hidden={immersive}>NO TAGS. NO GUESSWORK. JUST GRAVITY.</div>
     </main>
-    <div id="fridge-interior" className="interior-ui" inert={!immersive} aria-hidden={!immersive}>
-      <button ref={exitRef} className="exit-fridge" onClick={() => setOpen(false)} disabled={!open}><span aria-hidden="true">↖</span> LEAVE THE FRIDGE <kbd>ESC</kbd></button>
-      <div className="interior-heading"><span className="status-dot"/> FRIDGE / 001 <span>ILLUSTRATIVE INVENTORY</span></div>
-      <div className="journey-status" role="status">{phase === 'entering' ? 'OPENING A LITTLE WORLD.' : phase === 'leaving' ? 'SEE YOU ON THE OUTSIDE.' : ''}</div>
-      <div className="inside-controls" inert={phase !== 'inside' || !open}>
-        <div className="shelf-heading"><span className="eyebrow">0{shelf + 1} / {SHELVES[shelf].note}</span><h2>{SHELVES[shelf].name}</h2><p>Select an item to see whose it is.</p></div>
-        <div className="shelf-navigation" role="group" aria-label="Choose a shelf">{SHELVES.map((entry, index) => <button key={entry.name} aria-pressed={shelf === index} onClick={() => setShelf(index)}><span>0{index + 1}</span>{entry.name}</button>)}<span className="shelf-hint">SCROLL OR USE ↑ ↓ TO EXPLORE</span></div>
-        <div className="shelf-items" aria-label="Items on this shelf">{SHELVES[shelf].items.map(index => { const item = resolveItemBySlot(inventory, index); return item ? <button key={item.id} onClick={() => inspect(item)}><span className="item-marker" style={{ background: item.color }}/><span>{item.name}<small>{item.owner}’s</small></span><span aria-hidden="true">↗</span></button> : null; })}</div>
+    <div id="space-journey" inert={!immersive} aria-hidden={!immersive}>
+      <button ref={returnRef} className="exit-fridge" onClick={() => setTravel(false)} disabled={!travel}>
+        <span aria-hidden="true">↖</span> RETURN HOME <kbd>ESC</kbd>
+      </button>
+      <div className="interior-heading">
+        <span className="status-dot"/> FRIDGE / 001 · CONTENTS ADRIFT <span>ILLUSTRATIVE INVENTORY</span>
+      </div>
+      <div className="journey-status" role="status">
+        {phase === 'pulling' ? 'SOMETHING IS PULLING.' :
+         phase === 'wormhole' ? 'FOLDING SPACE.' :
+         phase === 'emerging' ? 'ARRIVING. OPENING UP.' :
+         phase === 'returning' ? 'HEADING HOME.' : ''}
+      </div>
+      <div
+        className={`floating-content ${phase === 'floating' ? 'is-visible' : ''}`}
+        inert={phase !== 'floating'}
+      >
+        <div className="floating-header">
+          <h2 className="floating-heading">Everything that was inside.</h2>
+          <p className="floating-hint">Select a floating item to see whose it is.</p>
+        </div>
+        <div className="floating-items" role="group" aria-label="Floating items">
+          {inventory.map(item => (
+            <button key={item.id} onClick={() => inspect(item)}>
+              <span className="item-marker" style={{ background: item.color }}/>
+              <span>{item.name}<small>{item.owner}’s</small></span>
+              <span aria-hidden="true">↗</span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
     <footer className="outside-ui" inert={immersive}><span>BUILT FOR SHARING.<br/><strong>NOT STEALING.</strong></span><button onClick={() => navigate('Alerts')} className="latest-event"><span className="event-dot"/> <span>LATEST SIGNAL <strong>Someone took Viet’s milk.</strong></span><span aria-hidden="true">↗</span></button><span className="footer-meta">FRIDGE TRACKER © 2026<br/>ILLUSTRATIVE DEMO DATA</span></footer>

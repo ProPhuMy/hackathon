@@ -15,14 +15,15 @@ npm run build
 npm run lint
 ```
 
-Click the fridge or “Open the fridge” for a 3.8-second orbit, door-opening,
-and dolly into a full-screen interior. Navigation and the invitation fade away.
-The top-left “Leave the fridge” control or Escape reverses the same path, even
-mid-entry. Select shelves with their buttons, the mouse wheel, or ↑ / ↓.
-Select a food model or its labeled button for owner and item details. Top-left navigation opens inventory (search and owner
-filter), event history (search), alerts (event inspection), and people panels.
-Escape closes a panel first, then exits the fridge. Focus returns to the opening
-control after exit. Reduced-motion preferences switch directly between views.
+Click the fridge or “Open the wormhole” to trigger a space journey. The fridge
+drifts and stretches into an opening wormhole, travels across folded space, and
+emerges into an unfamiliar quadrant where its doors open and items drift adrift.
+Select a floating food item or its labeled button for owner and item details.
+“Return home” or Escape reverses the entire journey, even mid-flight, returning
+to deep-space idle. Top-left navigation opens inventory (search and owner filter),
+event history (search), alerts (event inspection), and people panels. Escape
+closes an open panel first, then returns home. Reduced-motion preferences switch
+directly between idle and floating scenes.
 
 All inventory, people and events currently use illustrative local demo data.
 Adding a demo person lasts for the current page session; live registration,
