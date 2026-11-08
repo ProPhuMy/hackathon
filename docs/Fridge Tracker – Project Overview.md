@@ -135,14 +135,14 @@ If time runs out, cut infrastructure first: it makes the system look bigger, not
 
 ## **Work split**
 
-Four roles in parallel, connected by a shared event format locked in the first 30 minutes. Assignments are proposals; the team may change them.
+Four roles in parallel, connected by a shared event format locked in the first 30 minutes.
 
 | Role | Person | Owns | Hands off |
 | :---- | :---- | :---- | :---- |
-| 1\. Person recognition | Member 2 | Face camera, detection ensemble, ArcFace \+ AdaFace, BoT-SORT, open-set | person.seen events |
-| 2\. Item recognition | Member 3 | Item camera, door-open detection, Grounding DINO \+ SAM 2, HaMeR, PUT/TAKE classification, DINOv2 \+ Hungarian | item.event events |
-| 3\. Backend and matching | Dang (proposed) | Event bus, event sourcing \+ CQRS, time-based join of people with item events, matching \+ alerts, MCP server | API for the dashboard and MCP |
-| 4\. Dashboard, infra and video | Member 4 | Web dashboard, Kubernetes \+ autoscaling, Grafana, recording and editing the demo video | Video submitted at 13:00 |
+| 1\. Person recognition | Viet | Face camera, detection ensemble, ArcFace \+ AdaFace, BoT-SORT, open-set | person.seen events |
+| 2\. Item recognition | Dang | Item camera, door-open detection, Grounding DINO \+ SAM 2, HaMeR, PUT/TAKE classification, DINOv2 \+ Hungarian | item.event events |
+| 3\. Backend and matching | Phong | Event bus, event sourcing \+ CQRS, time-based join of people with item events, matching \+ alerts, MCP server | API for the dashboard and MCP |
+| 4\. Dashboard, infra and video | Khang | Web dashboard, Kubernetes \+ autoscaling, Grafana, recording and editing the demo video | Video submitted at 13:00 |
 
 The two recognition pipelines don't know about each other; the backend joins them by time window into fridge.event. The current format is defined in `contracts/*.schema.json`; examples:  
 `{ "event_id": "…", "topic": "person.seen", "track_id": 7, "person_id": "p_02", "ts": "2026-11-08T09:15:02.120Z", "confidence": 0.93 }`  
@@ -196,25 +196,25 @@ See the repo root `README.md` for folder ownership and the Git workflow.
 
 ### **First tasks per role**
 
-**Role 1, person recognition (Member 2\)**
+**Role 1, person recognition (Viet)**
 
 > 1. Read the stream from the Z Flip, run SCRFD \+ ArcFace, register a gallery for the 4 team members.  
 > 2. Add BoT-SORT, fuse embeddings per track, publish person.seen.  
 > 3. Once the main flow runs: add AdaFace, MagFace quality score, conformal threshold.
 
-**Role 2, item recognition (Member 3\)**
+**Role 2, item recognition (Dang)**
 
 > 1. Read the stream from the second phone; detect door open by brightness.  
 > 2. YOLO \+ MediaPipe Hands; decide PUT/TAKE by the direction an item crosses a line at the fridge door; publish item.event.  
 > 3. Add DINOv2 \+ Hungarian to tell items apart, then Grounding DINO \+ SAM 2\. Research HaMeR early since it depends heavily on NVIDIA GPUs; if it doesn't run on Mac, keep MediaPipe.
 
-**Role 3, backend and matching (Dang)**
+**Role 3, backend and matching (Phong)**
 
-> 1. In the first 30 minutes: create the repo, contracts/, fake\_events.py and docker-compose (Redpanda, Postgres), then hand it to the team.  
+> 1. Repo, contracts/, fake\_events.py and docker-compose (Redpanda, Postgres) are already set up by Dang; start from fake events on the bus.  
 > 2. Join each item.event with the nearest person.seen via an event-time window join with watermarks, write fridge.event, build inventory from the log.  
 > 3. Matching \+ alerts, API \+ SSE, then the MCP server.
 
-**Role 4, dashboard, infra and video (Member 4\)**
+**Role 4, dashboard, infra and video (Khang)**
 
 > 1. Dashboard running on fake data from Role 3's API.  
 > 2. Record about 20–30 labeled put/take clips early (who, which item, PUT or TAKE) as the test set, and write the accuracy script. This is the source of numbers for the final scene of the video.  

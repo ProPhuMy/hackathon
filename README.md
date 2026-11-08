@@ -9,10 +9,10 @@ Each person **only edits their own folder**. That way merges never conflict.
 
 | Folder | Owner | Branch |
 | --- | --- | --- |
-| `services/person/` | Role 1 – Person recognition | `person` |
-| `services/item/` | Role 2 – Item recognition | `item` |
-| `services/backend/` | Role 3 – Backend, matching, MCP (Dang) | `backend` |
-| `dashboard/`, `eval/`, `infra/k8s/` | Role 4 – Dashboard, infra, video | `dashboard` |
+| `services/person/` | Role 1 – Person recognition (Viet) | `person` |
+| `services/item/` | Role 2 – Item recognition (Dang) | `item` |
+| `services/backend/` | Role 3 – Backend, matching, MCP (Phong) | `backend` |
+| `dashboard/`, `eval/`, `infra/k8s/` | Role 4 – Dashboard, infra, video (Khang) | `dashboard` |
 | `contracts/`, `tools/`, `infra/docker-compose.yml`, `README.md`, `.gitignore`, `docs/` | **Shared – only Dang edits** | `main` |
 
 Need to change a shared file (add a field to an event, add a container to compose, …)? Ask Dang. Dang changes it on `main`, then everyone runs `git merge main` into their branch.
