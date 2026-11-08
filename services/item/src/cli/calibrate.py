@@ -91,9 +91,11 @@ def calibrate_command(source: str, out_path: Path | str = "config.json") -> Conf
     finally:
         cv2.destroyAllWindows()
 
-    if (o - c) < 10:
+    # Opening may brighten the ROI (fridge light) or darken it (door shelves over the floor); either works.
+    if abs(o - c) < 10:
         raise ValueError(
-            f"Door did not get brighter when opened (closed={c:.1f}, open={o:.1f}, diff={o - c:.1f} < 10)"
+            f"Door brightness barely changed when opened (closed={c:.1f}, open={o:.1f}, |diff|={abs(o - c):.1f} < 10);"
+            " draw the region where opening the door changes the picture most"
         )
 
     door_on = c + 0.6 * (o - c)

@@ -72,3 +72,11 @@ def test_measure_brightness_helper_matches_door_detector_colored_frame():
 
     det_above = DoorDetector(roi=roi, on=val + 0.5, off=0.0)
     assert det_above.update(frame) is False
+
+
+def test_door_that_darkens_when_opened():
+    # Top-down phone: the open door swings its shelves over the floor, so the ROI gets darker.
+    # Calibration then stores on < off, and the same hysteresis runs in the other direction.
+    detector = DoorDetector(roi=(10, 10, 20, 20), on=30.0, off=50.0)
+    actual = [detector.update(np.full((100, 100, 3), b, dtype=np.uint8)) for b in (80, 20, 40, 60, 80)]
+    assert actual == [False, True, True, False, False]

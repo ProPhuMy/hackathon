@@ -20,3 +20,20 @@ All of the top 6 yoloe-26l grape boxes were on the grape bunch. Rejected alterna
 - The prompt-free yoloe-11s-seg-pf (4,585 built-in names) mislabelled the background ("manatee", "tree frog").
 - yolov8m-oiv7 (Open Images) found no grapes and almost no hands.
 - Brand-level prompts ("coca-cola can", "water bottle") made the bottle read as "soda can".
+
+## Top-down camera, edge mode (2026-11-08)
+
+An iPhone (DroidCam) sat on top of the fridge looking down its front. Two labelled 40 s clips each contained
+one PUT then one TAKE of a water bottle. A third clip only opened and closed the door. The door line is
+vertical at x=690, measured from where hands reach and the door/body edges. The detector was yoloe-26l-seg.
+
+| clip | expected | "crossing" mode (hand crossings + door gate) | "edge" mode |
+|---|---|---|---|
+| put_take | PUT, TAKE | TAKE only | TAKE (PUT missed: bottle visible in 4 frames) |
+| put_take2 | PUT, TAKE | PUT only | PUT, TAKE (same gallery item_id) |
+| door_test | nothing | nothing | nothing |
+
+Why crossing mode fails here:
+- Door brightness is not monotonic: a half-open door darkens the ROI, a wide-open one brightens it, so the door
+  gate flickered.
+- The tracker loses the hand at the door edge, so in/out crossings are missed.

@@ -224,3 +224,16 @@ def test_dataclass_equality_and_init():
 
     assert t1 == t2
     assert t1 != t3
+
+
+def test_reach_counts_when_only_the_fingertips_pass_the_line(line):
+    # Top-down camera: the arm box runs from the frame edge to the door, and the hand disappears past the
+    # front edge. Its centre never crosses; the part reaching furthest inside does.
+    def arm(y2):
+        return Track(id=1, kind="hand", box=Box(90.0, 0.0, 110.0, y2), conf=0.9, label="arm")
+    bottle_in_hand = Track(id=10, kind="item", box=Box(90.0, 110.0, 110.0, 130.0), conf=0.8, label="bottle")
+    session = DoorSession(line)
+    assert session.update([arm(60.0)], ts="2026-11-07T20:00:01.000Z") == []                   # out, centre y=30
+    assert session.update([arm(130.0), bottle_in_hand], ts="2026-11-07T20:00:02.000Z") == []  # reaches in, centre y=65
+    trips = session.update([arm(60.0)], ts="2026-11-07T20:00:03.000Z")                         # back out, empty
+    assert [(t.type, t.item.label) for t in trips] == [("PUT", "bottle")]
