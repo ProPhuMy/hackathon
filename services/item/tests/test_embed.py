@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from fridge_item.embed import color_histogram
+from src.embed import color_histogram
 
 
 def test_color_histogram_shape_and_norm():
@@ -25,16 +25,16 @@ def test_color_histogram_empty_crop():
 
 
 def test_embed_module_import_does_not_import_transformers():
-    # If fridge_item.embed was imported, transformers shouldn't be required at module level
-    # Test that importing fridge_item.embed has color_histogram and Embedder defined
-    from fridge_item import embed
+    # If src.embed was imported, transformers shouldn't be required at module level
+    # Test that importing src.embed has color_histogram and Embedder defined
+    from src import embed
 
     assert hasattr(embed, "Embedder")
     assert hasattr(embed, "color_histogram")
 
 
 def test_embedder_call_mocked(monkeypatch):
-    from fridge_item.embed import Embedder
+    from src.embed import Embedder
 
     mock_torch = MagicMock()
     mock_torch.cuda.is_available.return_value = False

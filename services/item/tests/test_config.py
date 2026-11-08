@@ -4,9 +4,9 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from fridge_item.config import Config, DEFAULT_PROMPTS, load, save, calibrate
-from fridge_item.geometry import Box, DoorLine, Track
-from fridge_item.__main__ import parse_args
+from src.config import Config, DEFAULT_PROMPTS, load, save, calibrate
+from src.geometry import Box, DoorLine, Track
+from src.__main__ import parse_args
 
 
 def test_config_roundtrip(tmp_path: Path):
@@ -86,21 +86,21 @@ def test_calibrate_parser():
 
 
 def test_calibrate_main_dispatch():
-    from fridge_item.__main__ import main
-    with patch("fridge_item.__main__.calibrate") as mock_cal:
+    from src.__main__ import main
+    with patch("src.__main__.calibrate") as mock_cal:
         main(["calibrate", "http://camera/stream", "--out", "out.json"])
         mock_cal.assert_called_once_with("http://camera/stream", "out.json")
 
 
 def test_calibrate_empty_stream():
-    with patch("fridge_item.config.iter_frames", return_value=iter([])):
+    with patch("src.config.iter_frames", return_value=iter([])):
         with pytest.raises(ValueError, match="No frames available"):
             calibrate("empty_source")
 
 
 def test_calibrate_aborted_points():
     dummy_frame = np.full((50, 50, 3), 10, dtype=np.uint8)
-    with patch("fridge_item.config.iter_frames", return_value=iter([(dummy_frame, "ts")])), \
+    with patch("src.config.iter_frames", return_value=iter([(dummy_frame, "ts")])), \
          patch("cv2.selectROI", return_value=(0, 0, 10, 10)), \
          patch("cv2.namedWindow"), \
          patch("cv2.imshow"), \
@@ -132,7 +132,7 @@ def test_calibrate_invalid_roi_raises(tmp_path: Path):
     out_file = tmp_path / "config.json"
     dummy_frame = np.full((100, 100, 3), 40, dtype=np.uint8)
 
-    with patch("fridge_item.config.iter_frames", return_value=iter([(dummy_frame, "ts")])), \
+    with patch("src.config.iter_frames", return_value=iter([(dummy_frame, "ts")])), \
          patch("cv2.selectROI", return_value=(0, 0, 0, 0)), \
          patch("cv2.namedWindow"), \
          patch("cv2.imshow"), \
@@ -165,7 +165,7 @@ def test_calibrate_one_frame_source_exhaustion_on_open(tmp_path: Path):
             cb(cv2.EVENT_LBUTTONDOWN, 50, 70, 0, None)
         return 13
 
-    with patch("fridge_item.config.iter_frames", return_value=iter(frames)), \
+    with patch("src.config.iter_frames", return_value=iter(frames)), \
          patch("cv2.selectROI", return_value=(10, 20, 30, 40)), \
          patch("cv2.namedWindow"), \
          patch("cv2.imshow"), \
@@ -208,7 +208,7 @@ def test_calibrate_logic(tmp_path: Path):
             cb(cv2.EVENT_LBUTTONDOWN, 50, 70, 0, None)
         return 13
 
-    with patch("fridge_item.config.iter_frames", return_value=iter(frames)), \
+    with patch("src.config.iter_frames", return_value=iter(frames)), \
          patch("cv2.selectROI", return_value=(10, 20, 30, 40)), \
          patch("cv2.namedWindow"), \
          patch("cv2.imshow"), \
@@ -256,7 +256,7 @@ def test_calibrate_insufficient_brightness_diff_raises(tmp_path: Path):
             cb(cv2.EVENT_LBUTTONDOWN, 50, 70, 0, None)
         return 13
 
-    with patch("fridge_item.config.iter_frames", return_value=iter(frames)), \
+    with patch("src.config.iter_frames", return_value=iter(frames)), \
          patch("cv2.selectROI", return_value=(10, 20, 30, 40)), \
          patch("cv2.namedWindow"), \
          patch("cv2.imshow"), \

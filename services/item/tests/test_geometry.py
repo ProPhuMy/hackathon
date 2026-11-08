@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from fridge_item.geometry import Box, DoorLine, Point, Track, held_item
+from src.geometry import Box, DoorLine, Point, Track, held_item
 
 
 def test_side_inside_outside():

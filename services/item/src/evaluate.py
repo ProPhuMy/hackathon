@@ -57,10 +57,10 @@ def evaluate_command(
     shelf_check: bool = False,
 ) -> dict[str, int]:
     """Run ItemPipeline over labeled clips with a fresh temporary gallery and detector per clip."""
-    from fridge_item.config import load
-    from fridge_item.gallery import ItemGallery
-    from fridge_item.pipeline import ItemPipeline
-    from fridge_item.stream import iter_frames
+    from .config import load
+    from .gallery import ItemGallery
+    from .pipeline import ItemPipeline
+    from .stream import iter_frames
 
     expected_by_clip = load_labels(labels_path)
     if not expected_by_clip:
@@ -70,23 +70,23 @@ def evaluate_command(
     cfg = load(config_path)
     if detector_factory is None:
         if detector == "gdino":
-            from fridge_item.detect import GDinoDetector
+            from .detect import GDinoDetector
 
             detector_factory = GDinoDetector
         else:
-            from fridge_item.detect import Detector
+            from .detect import Detector
 
             detector_factory = Detector
 
     embedder = None
     if embed:
-        from fridge_item.embed import Embedder
+        from .embed import Embedder
 
         embedder = Embedder()
 
     segmenter = None
     if holding == "mask":
-        from fridge_item.segment import Segmenter
+        from .segment import Segmenter
 
         segmenter = Segmenter()
 

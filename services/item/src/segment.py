@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from fridge_item.geometry import Track
+from .geometry import Track
 
 
 class Segmenter:

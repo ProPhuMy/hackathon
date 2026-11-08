@@ -5,11 +5,11 @@ from jsonschema import Draft202012Validator
 import numpy as np
 import pytest
 
-from fridge_item.config import Config
-from fridge_item.gallery import ItemGallery
-from fridge_item.geometry import Box, DoorLine, Track
-from fridge_item.pipeline import ItemPipeline
-from fridge_item.session import Trip
+from src.config import Config
+from src.gallery import ItemGallery
+from src.geometry import Box, DoorLine, Track
+from src.pipeline import ItemPipeline
+from src.session import Trip
 
 SCHEMA = json.loads(
     (Path(__file__).parents[3] / "contracts" / "item.event.schema.json").read_text()
@@ -366,7 +366,7 @@ def test_take_put_take_ordering_resolves_put_first(tmp_path: Path):
 
 
 def test_cli_parse_args():
-    from fridge_item.__main__ import parse_args
+    from src.__main__ import parse_args
 
     args = parse_args(["run", "--source", "test.mp4", "--dry-run"])
     assert args.subcommand == "run"
@@ -417,9 +417,9 @@ def test_cli_parse_args():
 
 
 def test_cli_run_command_with_holding_mask(tmp_path: Path, monkeypatch, capsys):
-    from fridge_item.__main__ import run_command
-    from fridge_item.config import Config, save
-    from fridge_item.events import item_event
+    from src.__main__ import run_command
+    from src.config import Config, save
+    from src.events import item_event
 
     cfg_file = tmp_path / "cfg.json"
     line = DoorLine(p1=(0.0, 100.0), p2=(200.0, 100.0), inside=(100.0, 200.0))
@@ -430,25 +430,25 @@ def test_cli_run_command_with_holding_mask(tmp_path: Path, monkeypatch, capsys):
 
     mock_segmenter_instance = MagicMock()
     mock_segmenter_cls = MagicMock(return_value=mock_segmenter_instance)
-    monkeypatch.setattr("fridge_item.segment.Segmenter", mock_segmenter_cls)
+    monkeypatch.setattr("src.segment.Segmenter", mock_segmenter_cls)
 
     pipelines_built = []
-    from fridge_item.pipeline import ItemPipeline
+    from src.pipeline import ItemPipeline
     original_init = ItemPipeline.__init__
 
     def spy_init(self, *args, **kwargs):
         original_init(self, *args, **kwargs)
         pipelines_built.append(self)
 
-    monkeypatch.setattr("fridge_item.pipeline.ItemPipeline.__init__", spy_init)
+    monkeypatch.setattr("src.pipeline.ItemPipeline.__init__", spy_init)
 
-    monkeypatch.setattr("fridge_item.detect.Detector", MagicMock())
+    monkeypatch.setattr("src.detect.Detector", MagicMock())
     monkeypatch.setattr(
-        "fridge_item.__main__.iter_frames",
+        "src.__main__.iter_frames",
         lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
     )
     monkeypatch.setattr(
-        "fridge_item.pipeline.ItemPipeline.process",
+        "src.pipeline.ItemPipeline.process",
         lambda self, f, ts: [test_ev],
     )
 
@@ -467,9 +467,9 @@ def test_cli_run_command_with_holding_mask(tmp_path: Path, monkeypatch, capsys):
 
 
 def test_cli_run_command_with_embed(tmp_path: Path, monkeypatch, capsys):
-    from fridge_item.__main__ import run_command
-    from fridge_item.config import Config, save
-    from fridge_item.events import item_event
+    from src.__main__ import run_command
+    from src.config import Config, save
+    from src.events import item_event
 
     cfg_file = tmp_path / "cfg.json"
     line = DoorLine(p1=(0.0, 100.0), p2=(200.0, 100.0), inside=(100.0, 200.0))
@@ -480,15 +480,15 @@ def test_cli_run_command_with_embed(tmp_path: Path, monkeypatch, capsys):
 
     mock_embedder_instance = MagicMock()
     mock_embedder_cls = MagicMock(return_value=mock_embedder_instance)
-    monkeypatch.setattr("fridge_item.embed.Embedder", mock_embedder_cls)
+    monkeypatch.setattr("src.embed.Embedder", mock_embedder_cls)
 
-    monkeypatch.setattr("fridge_item.detect.Detector", MagicMock())
+    monkeypatch.setattr("src.detect.Detector", MagicMock())
     monkeypatch.setattr(
-        "fridge_item.__main__.iter_frames",
+        "src.__main__.iter_frames",
         lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
     )
     monkeypatch.setattr(
-        "fridge_item.pipeline.ItemPipeline.process",
+        "src.pipeline.ItemPipeline.process",
         lambda self, f, ts: [test_ev],
     )
 
@@ -505,9 +505,9 @@ def test_cli_run_command_with_embed(tmp_path: Path, monkeypatch, capsys):
 
 
 def test_cli_run_command_dry_run(tmp_path: Path, monkeypatch, capsys):
-    from fridge_item.__main__ import run_command
-    from fridge_item.config import Config, save
-    from fridge_item.events import item_event
+    from src.__main__ import run_command
+    from src.config import Config, save
+    from src.events import item_event
 
     cfg_file = tmp_path / "cfg.json"
     line = DoorLine(p1=(0.0, 100.0), p2=(200.0, 100.0), inside=(100.0, 200.0))
@@ -516,13 +516,13 @@ def test_cli_run_command_dry_run(tmp_path: Path, monkeypatch, capsys):
     test_ev = item_event("PUT", "item_123", "bottle", 0.9, ts="2026-11-07T20:00:01.000Z")
     frame = np.full((300, 300, 3), 10, dtype=np.uint8)
 
-    monkeypatch.setattr("fridge_item.detect.Detector", MagicMock())
+    monkeypatch.setattr("src.detect.Detector", MagicMock())
     monkeypatch.setattr(
-        "fridge_item.__main__.iter_frames",
+        "src.__main__.iter_frames",
         lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
     )
     monkeypatch.setattr(
-        "fridge_item.pipeline.ItemPipeline.process",
+        "src.pipeline.ItemPipeline.process",
         lambda self, f, ts: [test_ev],
     )
 
@@ -540,9 +540,9 @@ def test_cli_run_command_dry_run(tmp_path: Path, monkeypatch, capsys):
 def test_cli_run_command_kafka_publish(tmp_path: Path, monkeypatch):
     import sys
     from unittest.mock import MagicMock
-    from fridge_item.__main__ import run_command
-    from fridge_item.config import Config, save
-    from fridge_item.events import item_event
+    from src.__main__ import run_command
+    from src.config import Config, save
+    from src.events import item_event
 
     cfg_file = tmp_path / "cfg.json"
     line = DoorLine(p1=(0.0, 100.0), p2=(200.0, 100.0), inside=(100.0, 200.0))
@@ -551,13 +551,13 @@ def test_cli_run_command_kafka_publish(tmp_path: Path, monkeypatch):
     test_ev = item_event("PUT", "item_456", "can", 0.88, ts="2026-11-07T20:00:01.000Z")
     frame = np.full((300, 300, 3), 10, dtype=np.uint8)
 
-    monkeypatch.setattr("fridge_item.detect.Detector", MagicMock())
+    monkeypatch.setattr("src.detect.Detector", MagicMock())
     monkeypatch.setattr(
-        "fridge_item.__main__.iter_frames",
+        "src.__main__.iter_frames",
         lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
     )
     monkeypatch.setattr(
-        "fridge_item.pipeline.ItemPipeline.process",
+        "src.pipeline.ItemPipeline.process",
         lambda self, f, ts: [test_ev],
     )
 
@@ -589,21 +589,21 @@ def test_cli_run_command_kafka_publish(tmp_path: Path, monkeypatch):
 
 
 def test_cli_run_command_debug_video(tmp_path: Path, monkeypatch):
-    from fridge_item.__main__ import run_command
-    from fridge_item.config import Config, save
+    from src.__main__ import run_command
+    from src.config import Config, save
 
     cfg_file = tmp_path / "cfg.json"
     line = DoorLine(p1=(0.0, 100.0), p2=(200.0, 100.0), inside=(100.0, 200.0))
     save(Config(roi=(0, 0, 50, 50), line=line, door_on=100.0, door_off=50.0), cfg_file)
 
     frame = np.full((100, 100, 3), 10, dtype=np.uint8)
-    monkeypatch.setattr("fridge_item.detect.Detector", MagicMock())
+    monkeypatch.setattr("src.detect.Detector", MagicMock())
     monkeypatch.setattr(
-        "fridge_item.__main__.iter_frames",
+        "src.__main__.iter_frames",
         lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
     )
     monkeypatch.setattr(
-        "fridge_item.pipeline.ItemPipeline.process",
+        "src.pipeline.ItemPipeline.process",
         lambda self, f, ts: [],
     )
 
@@ -624,8 +624,8 @@ def test_cli_run_command_debug_video(tmp_path: Path, monkeypatch):
 
 
 def test_cli_run_latency_print(tmp_path: Path, monkeypatch, capsys):
-    from fridge_item.__main__ import run_command
-    from fridge_item.config import Config, save
+    from src.__main__ import run_command
+    from src.config import Config, save
 
     cfg_file = tmp_path / "cfg.json"
     line = DoorLine(p1=(0.0, 100.0), p2=(200.0, 100.0), inside=(100.0, 200.0))
@@ -633,9 +633,9 @@ def test_cli_run_latency_print(tmp_path: Path, monkeypatch, capsys):
 
     frame = np.full((50, 50, 3), 10, dtype=np.uint8)
     frames = [(frame, f"2026-11-07T20:00:{i:02d}.000Z") for i in range(100)]
-    monkeypatch.setattr("fridge_item.detect.Detector", MagicMock())
-    monkeypatch.setattr("fridge_item.__main__.iter_frames", lambda src: iter(frames))
-    monkeypatch.setattr("fridge_item.pipeline.ItemPipeline.process", lambda self, f, ts: [])
+    monkeypatch.setattr("src.detect.Detector", MagicMock())
+    monkeypatch.setattr("src.__main__.iter_frames", lambda src: iter(frames))
+    monkeypatch.setattr("src.pipeline.ItemPipeline.process", lambda self, f, ts: [])
 
     run_command(
         source="dummy_src",
@@ -726,8 +726,8 @@ def test_pipeline_segment_called_only_when_door_open(tmp_path: Path):
 
 
 def test_cli_run_command_flushes_on_shutdown(tmp_path: Path, monkeypatch, capsys):
-    from fridge_item.__main__ import run_command
-    from fridge_item.config import Config, save
+    from src.__main__ import run_command
+    from src.config import Config, save
 
     cfg_file = tmp_path / "cfg.json"
     line = DoorLine(p1=(0.0, 100.0), p2=(200.0, 100.0), inside=(100.0, 200.0))
@@ -738,14 +738,14 @@ def test_cli_run_command_flushes_on_shutdown(tmp_path: Path, monkeypatch, capsys
         [hand(1, 100.0, 150.0), item(10, 100.0, 150.0, label="juice", conf=0.85)],
     ]
     detector = ScriptedDetector(script)
-    monkeypatch.setattr("fridge_item.detect.Detector", lambda *args, **kwargs: detector)
+    monkeypatch.setattr("src.detect.Detector", lambda *args, **kwargs: detector)
 
     bright_frame = np.full((300, 300, 3), 200, dtype=np.uint8)
     frames = [
         (bright_frame, "2026-11-07T20:00:01.000Z"),
         (bright_frame, "2026-11-07T20:00:02.000Z"),
     ]
-    monkeypatch.setattr("fridge_item.__main__.iter_frames", lambda src: iter(frames))
+    monkeypatch.setattr("src.__main__.iter_frames", lambda src: iter(frames))
 
     run_command(
         source="dummy_src",
@@ -764,28 +764,28 @@ def test_cli_run_command_flushes_on_shutdown(tmp_path: Path, monkeypatch, capsys
 def test_shutdown_cleanup_on_flush_error(tmp_path: Path, monkeypatch):
     import sys
     from unittest.mock import MagicMock
-    from fridge_item.__main__ import run_command
-    from fridge_item.config import Config, save
-    from fridge_item.events import item_event
+    from src.__main__ import run_command
+    from src.config import Config, save
+    from src.events import item_event
 
     cfg_file = tmp_path / "cfg.json"
     line = DoorLine(p1=(0.0, 100.0), p2=(200.0, 100.0), inside=(100.0, 200.0))
     save(Config(roi=(0, 0, 50, 50), line=line, door_on=100.0, door_off=50.0), cfg_file)
 
     frame = np.full((100, 100, 3), 10, dtype=np.uint8)
-    monkeypatch.setattr("fridge_item.detect.Detector", MagicMock())
+    monkeypatch.setattr("src.detect.Detector", MagicMock())
     monkeypatch.setattr(
-        "fridge_item.__main__.iter_frames",
+        "src.__main__.iter_frames",
         lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
     )
 
     flushed_ev = item_event("PUT", "item_err", "coke", 0.9, ts="2026-11-07T20:00:02.000Z")
     monkeypatch.setattr(
-        "fridge_item.pipeline.ItemPipeline.process",
+        "src.pipeline.ItemPipeline.process",
         lambda self, f, ts: [],
     )
     monkeypatch.setattr(
-        "fridge_item.pipeline.ItemPipeline.close",
+        "src.pipeline.ItemPipeline.close",
         lambda self: [flushed_ev],
     )
 
@@ -818,28 +818,28 @@ def test_shutdown_cleanup_on_flush_error(tmp_path: Path, monkeypatch):
 def test_shutdown_order_and_flush_warning_and_delivery_callback(tmp_path: Path, monkeypatch, capsys):
     import sys
     from unittest.mock import MagicMock
-    from fridge_item.__main__ import run_command
-    from fridge_item.config import Config, save
-    from fridge_item.events import item_event
+    from src.__main__ import run_command
+    from src.config import Config, save
+    from src.events import item_event
 
     cfg_file = tmp_path / "cfg.json"
     line = DoorLine(p1=(0.0, 100.0), p2=(200.0, 100.0), inside=(100.0, 200.0))
     save(Config(roi=(0, 0, 50, 50), line=line, door_on=100.0, door_off=50.0), cfg_file)
 
     frame = np.full((100, 100, 3), 10, dtype=np.uint8)
-    monkeypatch.setattr("fridge_item.detect.Detector", MagicMock())
+    monkeypatch.setattr("src.detect.Detector", MagicMock())
     monkeypatch.setattr(
-        "fridge_item.__main__.iter_frames",
+        "src.__main__.iter_frames",
         lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
     )
 
     ev = item_event("PUT", "item-1", "coke", 0.9, ts="2026-11-07T20:00:01.000Z")
     monkeypatch.setattr(
-        "fridge_item.pipeline.ItemPipeline.process",
+        "src.pipeline.ItemPipeline.process",
         lambda self, f, ts: [ev],
     )
     monkeypatch.setattr(
-        "fridge_item.pipeline.ItemPipeline.close",
+        "src.pipeline.ItemPipeline.close",
         lambda self: [],
     )
 
@@ -1047,7 +1047,7 @@ def test_pipeline_shelf_check_take_fallback_last_open_ts(tmp_path: Path):
 
 
 def test_cli_shelf_check_flags():
-    from fridge_item.__main__ import parse_args
+    from src.__main__ import parse_args
 
     args_run = parse_args(["run", "--source", "vid.mp4", "--shelf-check"])
     assert args_run.shelf_check is True

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Literal
 import numpy as np
-from fridge_item.geometry import DoorLine, Track, held_item
+from .geometry import DoorLine, Track, held_item
 
 
 @dataclass(frozen=True)

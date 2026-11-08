@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from fridge_item.door import DoorDetector
+from src.door import DoorDetector
 
 
 def test_door_hysteresis():
@@ -54,7 +54,7 @@ def test_door_2d_grayscale_and_threshold_edges():
 
 
 def test_measure_brightness_helper_matches_door_detector_colored_frame():
-    from fridge_item.door import measure_brightness
+    from src.door import measure_brightness
 
     roi = (10, 10, 20, 20)
     # Colored frame: B=200, G=50, R=20

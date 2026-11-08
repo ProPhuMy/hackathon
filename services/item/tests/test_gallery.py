@@ -2,7 +2,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from fridge_item.gallery import ItemGallery
+from src.gallery import ItemGallery
 
 
 def test_add_then_take_same_label(tmp_path: Path):

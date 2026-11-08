@@ -3,13 +3,13 @@ from __future__ import annotations
 from typing import Callable
 import numpy as np
 
-from fridge_item.config import Config
-from fridge_item.door import DoorDetector
-from fridge_item.events import item_event
-from fridge_item.gallery import ItemGallery
-from fridge_item.geometry import Track
-from fridge_item.session import DoorSession, Trip
-from fridge_item.shelf import shelf_diff
+from .config import Config
+from .door import DoorDetector
+from .events import item_event
+from .gallery import ItemGallery
+from .geometry import Track
+from .session import DoorSession, Trip
+from .shelf import shelf_diff
 
 
 class ItemPipeline:

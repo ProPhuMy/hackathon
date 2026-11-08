@@ -2,9 +2,9 @@ from pathlib import Path
 from unittest.mock import MagicMock
 import pytest
 
-from fridge_item.config import Config, save
-from fridge_item.evaluate import evaluate_command, score
-from fridge_item.geometry import DoorLine
+from src.config import Config, save
+from src.evaluate import evaluate_command, score
+from src.geometry import DoorLine
 
 
 def test_score_exact():
@@ -71,7 +71,7 @@ def test_evaluate_fresh_detector_per_clip(tmp_path: Path, monkeypatch):
         cfg_file,
     )
 
-    monkeypatch.setattr("fridge_item.stream.iter_frames", lambda src: iter([]))
+    monkeypatch.setattr("src.stream.iter_frames", lambda src: iter([]))
 
     created_detectors = []
 
@@ -143,22 +143,22 @@ def test_evaluate_with_embed_instantiates_embedder_once(tmp_path: Path, monkeypa
         cfg_file,
     )
 
-    monkeypatch.setattr("fridge_item.stream.iter_frames", lambda src: iter([]))
+    monkeypatch.setattr("src.stream.iter_frames", lambda src: iter([]))
     mock_embedder_instance = MagicMock()
     mock_embedder_cls = MagicMock(return_value=mock_embedder_instance)
-    monkeypatch.setattr("fridge_item.embed.Embedder", mock_embedder_cls)
+    monkeypatch.setattr("src.embed.Embedder", mock_embedder_cls)
 
     pipelines_built = []
     real_init = None
 
-    from fridge_item.pipeline import ItemPipeline
+    from src.pipeline import ItemPipeline
     original_init = ItemPipeline.__init__
 
     def spy_init(self, *args, **kwargs):
         original_init(self, *args, **kwargs)
         pipelines_built.append(self)
 
-    monkeypatch.setattr("fridge_item.pipeline.ItemPipeline.__init__", spy_init)
+    monkeypatch.setattr("src.pipeline.ItemPipeline.__init__", spy_init)
 
     evaluate_command(
         labels_path=str(labels_file),
@@ -196,20 +196,20 @@ def test_evaluate_with_holding_mask_instantiates_segmenter_once(tmp_path: Path, 
         cfg_file,
     )
 
-    monkeypatch.setattr("fridge_item.stream.iter_frames", lambda src: iter([]))
+    monkeypatch.setattr("src.stream.iter_frames", lambda src: iter([]))
     mock_segmenter_instance = MagicMock()
     mock_segmenter_cls = MagicMock(return_value=mock_segmenter_instance)
-    monkeypatch.setattr("fridge_item.segment.Segmenter", mock_segmenter_cls)
+    monkeypatch.setattr("src.segment.Segmenter", mock_segmenter_cls)
 
     pipelines_built = []
-    from fridge_item.pipeline import ItemPipeline
+    from src.pipeline import ItemPipeline
     original_init = ItemPipeline.__init__
 
     def spy_init(self, *args, **kwargs):
         original_init(self, *args, **kwargs)
         pipelines_built.append(self)
 
-    monkeypatch.setattr("fridge_item.pipeline.ItemPipeline.__init__", spy_init)
+    monkeypatch.setattr("src.pipeline.ItemPipeline.__init__", spy_init)
 
     evaluate_command(
         labels_path=str(labels_file),

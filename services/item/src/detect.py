@@ -3,7 +3,7 @@ from typing import Literal
 import cv2
 import numpy as np
 
-from fridge_item.geometry import Box, Track
+from .geometry import Box, Track
 
 
 def to_tracks(

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fridge_item.geometry import Track
+from .geometry import Track
 
 
 def shelf_diff(

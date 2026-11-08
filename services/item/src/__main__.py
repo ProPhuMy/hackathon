@@ -6,8 +6,8 @@ import time
 import cv2
 import numpy as np
 
-from fridge_item.config import calibrate
-from fridge_item.stream import iter_frames
+from .config import calibrate
+from .stream import iter_frames
 
 
 def record_command(url: str, out_path: str) -> None:
@@ -41,17 +41,17 @@ def probe_command(
     detector: str = "yoloe",
 ) -> None:
     """Run detector and overlay on clip without logic, writing MP4 at 15 fps."""
-    from fridge_item.config import load
-    from fridge_item.door import DoorDetector
-    from fridge_item.draw import overlay
+    from .config import load
+    from .door import DoorDetector
+    from .draw import overlay
 
     cfg = load(config_path)
     if detector == "gdino":
-        from fridge_item.detect import GDinoDetector
+        from .detect import GDinoDetector
 
         detector_model = GDinoDetector(prompts=cfg.prompts, hand_label=cfg.hand_label)
     else:
-        from fridge_item.detect import Detector
+        from .detect import Detector
 
         detector_model = Detector(prompts=cfg.prompts, hand_label=cfg.hand_label)
 
@@ -93,31 +93,31 @@ def run_command(
     shelf_check: bool = False,
 ) -> None:
     """Run item recognition pipeline, printing events, publishing to Kafka, and tracking latency."""
-    from fridge_item.config import load
-    from fridge_item.draw import overlay
-    from fridge_item.gallery import ItemGallery
-    from fridge_item.pipeline import ItemPipeline
+    from .config import load
+    from .draw import overlay
+    from .gallery import ItemGallery
+    from .pipeline import ItemPipeline
 
     cfg = load(config_path)
     gallery = ItemGallery(gallery_path)
     if detector == "gdino":
-        from fridge_item.detect import GDinoDetector
+        from .detect import GDinoDetector
 
         detector_model = GDinoDetector(prompts=cfg.prompts, hand_label=cfg.hand_label)
     else:
-        from fridge_item.detect import Detector
+        from .detect import Detector
 
         detector_model = Detector(prompts=cfg.prompts, hand_label=cfg.hand_label)
 
     embedder = None
     if embed:
-        from fridge_item.embed import Embedder
+        from .embed import Embedder
 
         embedder = Embedder()
 
     segmenter = None
     if holding == "mask":
-        from fridge_item.segment import Segmenter
+        from .segment import Segmenter
 
         segmenter = Segmenter()
 
@@ -256,15 +256,15 @@ def evaluate_command(
     shelf_check: bool = False,
 ) -> dict[str, int]:
     """Evaluate item recognition pipeline against labeled clips."""
-    from fridge_item.evaluate import evaluate_command as run_evaluate
+    from .evaluate import evaluate_command as run_evaluate
 
     if detector_factory is None:
         if detector == "gdino":
-            from fridge_item.detect import GDinoDetector
+            from .detect import GDinoDetector
 
             detector_factory = GDinoDetector
         else:
-            from fridge_item.detect import Detector
+            from .detect import Detector
 
             detector_factory = Detector
 

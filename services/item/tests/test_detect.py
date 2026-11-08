@@ -3,16 +3,16 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from fridge_item.geometry import Box, DoorLine, Track
-from fridge_item.detect import (
+from src.geometry import Box, DoorLine, Track
+from src.detect import (
     Detector,
     GDinoDetector,
     phrase_to_class,
     to_tracks,
     tracker_output_to_tracks,
 )
-from fridge_item.draw import overlay
-from fridge_item.__main__ import evaluate_command, parse_args, probe_command
+from src.draw import overlay
+from src.__main__ import evaluate_command, parse_args, probe_command
 
 
 def test_drops_rows_without_id():
@@ -201,14 +201,14 @@ def test_probe_parser():
 
 
 def test_probe_main_dispatch():
-    from fridge_item.__main__ import main
-    with patch("fridge_item.__main__.probe_command") as mock_probe:
+    from src.__main__ import main
+    with patch("src.__main__.probe_command") as mock_probe:
         main(["probe", "in.mp4", "out.mp4", "--config", "conf.json"])
         mock_probe.assert_called_once_with("in.mp4", "out.mp4", "conf.json")
 
 
 def test_probe_command_flow(tmp_path: Path):
-    from fridge_item.config import Config
+    from src.config import Config
 
     cfg = Config(
         roi=(0, 0, 50, 50),
@@ -228,9 +228,9 @@ def test_probe_command_flow(tmp_path: Path):
     ]
     mock_writer = MagicMock()
 
-    with patch("fridge_item.config.load", return_value=cfg), \
-         patch("fridge_item.detect.Detector", return_value=mock_detector), \
-         patch("fridge_item.__main__.iter_frames", return_value=iter(frames)), \
+    with patch("src.config.load", return_value=cfg), \
+         patch("src.detect.Detector", return_value=mock_detector), \
+         patch("src.__main__.iter_frames", return_value=iter(frames)), \
          patch("cv2.VideoWriter", return_value=mock_writer):
         probe_command("test_clip.mp4", str(out_video), config_path="dummy.json")
 
@@ -304,7 +304,7 @@ def test_cli_detector_flag():
 
 
 def test_probe_command_selects_gdino(tmp_path: Path):
-    from fridge_item.config import Config
+    from src.config import Config
 
     cfg = Config(
         roi=(0, 0, 50, 50),
@@ -320,9 +320,9 @@ def test_probe_command_selects_gdino(tmp_path: Path):
     mock_gdino.return_value = []
     mock_writer = MagicMock()
 
-    with patch("fridge_item.config.load", return_value=cfg), \
-         patch("fridge_item.detect.GDinoDetector", return_value=mock_gdino) as mock_gdino_cls, \
-         patch("fridge_item.__main__.iter_frames", return_value=iter(frames)), \
+    with patch("src.config.load", return_value=cfg), \
+         patch("src.detect.GDinoDetector", return_value=mock_gdino) as mock_gdino_cls, \
+         patch("src.__main__.iter_frames", return_value=iter(frames)), \
          patch("cv2.VideoWriter", return_value=mock_writer):
         probe_command("clip.mp4", str(tmp_path / "out.mp4"), detector="gdino")
 
@@ -331,7 +331,7 @@ def test_probe_command_selects_gdino(tmp_path: Path):
 
 
 def test_evaluate_command_selects_gdino(tmp_path: Path, monkeypatch):
-    from fridge_item.config import Config, save
+    from src.config import Config, save
 
     labels_file = tmp_path / "labels.csv"
     labels_file.write_text("clip1.mp4,PUT,milk\n")
@@ -351,12 +351,12 @@ def test_evaluate_command_selects_gdino(tmp_path: Path, monkeypatch):
         ),
         cfg_file,
     )
-    monkeypatch.setattr("fridge_item.stream.iter_frames", lambda src: iter([]))
+    monkeypatch.setattr("src.stream.iter_frames", lambda src: iter([]))
     mock_gdino = MagicMock()
     mock_gdino.return_value = []
     mock_factory = MagicMock(return_value=mock_gdino)
 
-    with patch("fridge_item.detect.GDinoDetector", mock_factory):
+    with patch("src.detect.GDinoDetector", mock_factory):
         evaluate_command(
             labels_path=str(labels_file),
             clips_dir=str(clips_dir),
@@ -368,8 +368,8 @@ def test_evaluate_command_selects_gdino(tmp_path: Path, monkeypatch):
 
 
 def test_run_command_selects_gdino(tmp_path: Path, monkeypatch):
-    from fridge_item.config import Config, save
-    from fridge_item.__main__ import run_command
+    from src.config import Config, save
+    from src.__main__ import run_command
 
     cfg_file = tmp_path / "config.json"
     save(
@@ -383,11 +383,11 @@ def test_run_command_selects_gdino(tmp_path: Path, monkeypatch):
         ),
         cfg_file,
     )
-    monkeypatch.setattr("fridge_item.stream.iter_frames", lambda src: iter([]))
+    monkeypatch.setattr("src.stream.iter_frames", lambda src: iter([]))
     mock_gdino = MagicMock()
     mock_gdino_cls = MagicMock(return_value=mock_gdino)
 
-    with patch("fridge_item.detect.GDinoDetector", mock_gdino_cls):
+    with patch("src.detect.GDinoDetector", mock_gdino_cls):
         run_command(
             source="dummy.mp4",
             config_path=str(cfg_file),

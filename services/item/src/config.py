@@ -6,9 +6,9 @@ from typing import Any
 import cv2
 import numpy as np
 
-from fridge_item.door import measure_brightness
-from fridge_item.geometry import DoorLine, Point
-from fridge_item.stream import iter_frames
+from .door import measure_brightness
+from .geometry import DoorLine, Point
+from .stream import iter_frames
 
 DEFAULT_PROMPTS: list[str] = [
     "hand",

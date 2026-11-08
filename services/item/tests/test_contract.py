@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, ValidationError
 
-from fridge_item.events import item_event
+from src.events import item_event
 
 SCHEMA = json.loads((Path(__file__).parents[3] / "contracts" / "item.event.schema.json").read_text())
 

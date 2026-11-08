@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 import requests
 
-from fridge_item.events import now_ts
+from .events import now_ts
 
 
 def split_jpegs(buf: bytes) -> tuple[list[bytes], bytes]:

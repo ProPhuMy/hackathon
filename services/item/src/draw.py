@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 
-from fridge_item.geometry import DoorLine, Track
+from .geometry import DoorLine, Track
 
 
 def overlay(
