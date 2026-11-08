@@ -3,6 +3,7 @@ from pathlib import Path
 
 import cv2
 
+from fridge_item.config import calibrate
 from fridge_item.stream import iter_frames
 
 
@@ -25,6 +26,11 @@ def record_command(url: str, out_path: str) -> None:
             writer.release()
 
 
+def calibrate_command(source: str, out_path: str) -> None:
+    """Calibrate ROI, door line, and brightness thresholds."""
+    calibrate(source, out_path)
+
+
 def parse_args(args: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="fridge-item", description="Fridge Tracker item-recognition service")
     subparsers = parser.add_subparsers(dest="subcommand", required=True)
@@ -33,6 +39,14 @@ def parse_args(args: list[str] | None = None) -> argparse.Namespace:
     record_parser.add_argument("url", help="HTTP stream URL or video path")
     record_parser.add_argument("out", help="Output MP4 file path")
 
+    calibrate_parser = subparsers.add_parser(
+        "calibrate", help="Calibrate fridge ROI, door line, and brightness thresholds"
+    )
+    calibrate_parser.add_argument("source", help="HTTP stream URL or video path")
+    calibrate_parser.add_argument(
+        "--out", default="config.json", help="Output config JSON path (default: config.json)"
+    )
+
     return parser.parse_args(args)
 
 
@@ -40,6 +54,8 @@ def main(args: list[str] | None = None) -> None:
     parsed = parse_args(args)
     if parsed.subcommand == "record":
         record_command(parsed.url, parsed.out)
+    elif parsed.subcommand == "calibrate":
+        calibrate_command(parsed.source, parsed.out)
 
 
 if __name__ == "__main__":
