@@ -36,3 +36,16 @@ def test_same_recording_cannot_be_counted_as_two_encounters(tmp_path):
                         'copy.avi,a,s2,development,0,1\n')
     with pytest.raises(ValueError, match='recording'):
         read_manifest(manifest, 'development')
+
+
+def test_manifest_clips_get_the_same_rotation_as_live_capture(tmp_path):
+    from conftest import is_turned_clockwise, left_lit_clip
+    from src.evaluation.dataset import observations
+    seen = []
+    class Vision:
+        def single_face(self, image):
+            seen.append(image)
+            return None
+    row = {'path': str(left_lit_clip(tmp_path / 'clip.avi')), 'person_id': None, 'start_s': 0., 'end_s': 10.}
+    observations(row, Vision(), rotation=90)
+    assert seen and all(is_turned_clockwise(image) for image in seen)

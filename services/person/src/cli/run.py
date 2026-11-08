@@ -75,7 +75,7 @@ def execute(args):
     previous_decision = None
     previous_segment = None
     try:
-        with Capture(args.source, origin) as capture:
+        with Capture(args.source, origin, args.rotate) as capture:
             for image, received, timestamp in capture:
                 if image is None:
                     if engine is not None:

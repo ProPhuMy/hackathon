@@ -64,3 +64,16 @@ def test_reconnect_attempts_are_bounded(monkeypatch):
         with pytest.raises(RuntimeError, match='reconnect'):
             list(capture)
     assert len(starts) == 4
+
+
+def test_capture_turns_frames_for_a_portrait_mounted_phone(tmp_path):
+    from conftest import is_turned_clockwise, left_lit_clip
+    clip = left_lit_clip(tmp_path / 'clip.avi')
+    with Capture(str(clip), datetime(2026, 1, 1, tzinfo=timezone.utc), rotation=90) as capture:
+        frames = list(capture)
+    assert len(frames) == 5 and all(is_turned_clockwise(image) for image, _, _ in frames)
+
+
+def test_rotation_must_be_a_right_angle():
+    with pytest.raises(ValueError, match='0, 90, 180 or 270'):
+        Capture('0', rotation=45)

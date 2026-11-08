@@ -33,6 +33,7 @@ def main():
         if command != 'remove':
             sub.add_argument('--source', required=True)
             sub.add_argument('--replay-origin', help='UTC origin required for recorded clips')
+            sub.add_argument('--rotate', type=int, choices=(0, 90, 180, 270), default=0, help='Turn frames clockwise; 90 or 270 for a phone mounted in portrait that streams landscape')
         if command == 'run':
             output = sub.add_mutually_exclusive_group(required=True)
             output.add_argument('--dry-run', action='store_true', help='Validated JSONL on stdout')
@@ -50,11 +51,13 @@ def main():
         sub.add_argument('--detector', type=Path, default=Path('models/det_10g.onnx'))
         sub.add_argument('--recognizer', type=Path, default=Path('models/w600k_r50.onnx'))
         sub.add_argument('--gallery', type=Path, default=Path('models/gallery.json'))
+        sub.add_argument('--rotate', type=int, choices=(0, 90, 180, 270), default=0, help='Turn frames clockwise; 90 or 270 for a phone mounted in portrait that streams landscape')
         if command == 'evaluate':
             sub.add_argument('--policy', type=Path, required=True)
     live = commands.add_parser('check-camera', help='Live model smoke check; no enrollment or retained frames')
     live.add_argument('--source', default='0')
     live.add_argument('--duration', type=float, default=15.)
+    live.add_argument('--rotate', type=int, choices=(0, 90, 180, 270), default=0, help='Turn frames clockwise; 90 or 270 for a phone mounted in portrait that streams landscape')
     live.add_argument('--detector', type=Path, default=Path('models/det_10g.onnx'))
     live.add_argument('--recognizer', type=Path, default=Path('models/w600k_r50.onnx'))
     for command in ('calibrate-scores', 'evaluate-scores'):

@@ -10,7 +10,7 @@ SCHEMA_PATH = Path(__file__).parents[3] / 'contracts' / 'person.seen.schema.json
 def fake_capture(frames):
     """Capture stand-in that replays (image, received, timestamp) frames without a camera."""
     class Capture:
-        def __init__(self, *args):
+        def __init__(self, *args, **kwargs):
             pass
         def __enter__(self):
             return iter(frames)
@@ -68,3 +68,20 @@ def make_detector(tmp_path, monkeypatch, raw_output, input_shape=(1, 3, 640, 640
                                     output_shape=output_shape, output_type=output_type)
     monkeypatch.setattr(ort, 'InferenceSession', lambda *args, **kwargs: mock_session)
     return YOLO5Face(model_file, conf_threshold=conf_threshold, iou_threshold=iou_threshold, input_size=input_size)
+
+
+def left_lit_clip(path, frames=5):
+    """64x32 (w x h) MJPG clip, left half white: a 90-degree clockwise turn moves the white to the top."""
+    import cv2
+    import numpy as np
+    image = np.zeros((32, 64, 3), dtype=np.uint8)
+    image[:, :32] = 255
+    writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*'MJPG'), 5, (64, 32))
+    for _ in range(frames):
+        writer.write(image)
+    writer.release()
+    return path
+
+
+def is_turned_clockwise(image):
+    return image.shape == (64, 32, 3) and image[:32].mean() > 200 > 50 > image[32:].mean()

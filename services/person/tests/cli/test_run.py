@@ -24,7 +24,7 @@ def setup_runtime(tmp_path, monkeypatch, frames, command='run'):
     policy = tmp_path / 'policy.json'
     policy.write_text(json.dumps(dict(model=Vision.signature, gallery=gallery.fingerprint,
                                      development_manifest='dev.csv', accept=.8, reject=.2, margin=.1)))
-    return SimpleNamespace(command=command, detector=None, recognizer=None, gallery=gallery.path,
+    return SimpleNamespace(command=command, rotate=0, detector=None, recognizer=None, gallery=gallery.path,
                            person_id='b', source='fake', replay_origin='2026-01-01T00:00:00Z',
                            broker=None, policy=policy,
                            schema=SCHEMA_PATH)
@@ -162,7 +162,7 @@ def setup_ensemble(tmp_path, monkeypatch, ada_live=(0., 1.), ada_enrolled=(0., 1
     policy_path = tmp_path / 'ensemble_policy.json'
     policy_path.write_text(json.dumps(policy))
     args = SimpleNamespace(
-        command='run', detector=None, recognizer=None, gallery=g_arc.path, ada_gallery=g_ada.path,
+        command='run', rotate=0, detector=None, recognizer=None, gallery=g_arc.path, ada_gallery=g_ada.path,
         adaface=None, magface=None, person_id=None, source='fake',
         replay_origin='2026-01-01T00:00:00Z', broker=None, policy=policy_path, schema=SCHEMA_PATH)
     return args, policy, policy_path

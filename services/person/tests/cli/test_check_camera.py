@@ -19,7 +19,7 @@ def test_live_check_outputs_only_aggregate_diagnostics(monkeypatch, capsys):
     monkeypatch.setattr(vision, 'Vision', Vision)
     monkeypatch.setattr(capture, 'Capture', Capture)
     monkeypatch.setattr(check_camera.time, 'monotonic', lambda: 100.)
-    check_camera.execute(SimpleNamespace(duration=1., source='0', detector=None, recognizer=None))
+    check_camera.execute(SimpleNamespace(duration=1., source='0', rotate=0, detector=None, recognizer=None))
     report = json.loads(capsys.readouterr().out)
     assert report['decoded_frames'] == 2
     assert report['usable_single_face_frames'] == 1

@@ -101,6 +101,10 @@ uv run python -m src run --source 0 --policy models/baseline-policy.json --broke
 ```
 
 Bare decimal sources are webcams; prefix numeric file names with `./`.
+`--rotate {90,180,270}` turns every frame clockwise before detection. It is available on `enroll`, `run`,
+`check-camera`, `calibrate` and `evaluate`. Use it when a phone mounted in portrait streams landscape: a
+sideways face fails the eye-orientation gate. Use the same value for every command. On 2026-11-08, an
+upright iPhone running DroidCam gave 50/50 usable frames with `--rotate 90`, against 8/50 without it.
 Recorded clips additionally require `--replay-origin 2026-11-08T09:00:00Z`.
 Live events use host receipt time; recorded events preserve presentation time.
 Do not feed historical replay events into live alerts. Enrollment collects 20

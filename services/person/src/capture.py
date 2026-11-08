@@ -11,7 +11,16 @@ def source_value(source):
     return int(source) if source.isdecimal() else source
 
 
-def _read(source, output, stop, replay_origin):
+def rotate(image, rotation):
+    """Turn a frame clockwise by 0/90/180/270 degrees, e.g. a portrait-mounted phone streaming landscape."""
+    if not rotation:
+        return image
+    import cv2
+    return cv2.rotate(image, {90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180,
+                              270: cv2.ROTATE_90_COUNTERCLOCKWISE}[rotation])
+
+
+def _read(source, output, stop, replay_origin, rotation=0):
     import os
     # OpenCV 5 has no setLogLevel API; configure diagnostics before importing it.
     os.environ['OPENCV_LOG_LEVEL'] = 'SILENT'
@@ -35,6 +44,7 @@ def _read(source, output, stop, replay_origin):
             if not ok:
                 output.put(('error', 'Live capture disconnected') if live else ('end', None), timeout=5)
                 return
+            frame = rotate(frame, rotation)
             received = time.monotonic()
             if live:
                 timestamp = datetime.now(timezone.utc)
@@ -72,8 +82,10 @@ def _read(source, output, stop, replay_origin):
 
 
 class Capture:
-    def __init__(self, source, replay_origin=None):
-        self.source, self.replay_origin = source, replay_origin
+    def __init__(self, source, replay_origin=None, rotation=0):
+        if rotation not in (0, 90, 180, 270):
+            raise ValueError('Rotation must be 0, 90, 180 or 270 degrees')
+        self.source, self.replay_origin, self.rotation = source, replay_origin, rotation
         self.live = isinstance(source_value(source), int) or not Path(source).is_file()
         if not self.live and replay_origin is None:
             raise ValueError('Recorded video requires --replay-origin in UTC')
@@ -83,7 +95,7 @@ class Capture:
         context = mp.get_context('spawn')
         self.output = context.Queue(maxsize=1)
         self.stop = context.Event()
-        self.process = context.Process(target=_read, args=(self.source, self.output, self.stop, self.replay_origin), daemon=True)
+        self.process = context.Process(target=_read, args=(self.source, self.output, self.stop, self.replay_origin, self.rotation), daemon=True)
         self.process.start()
 
     def _close(self):

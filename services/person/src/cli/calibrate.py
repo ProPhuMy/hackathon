@@ -25,7 +25,7 @@ def execute(args):
     else:
         if {row['person_id'] for row in rows if row['person_id']} != set(gallery.people):
             raise ValueError('Development data must cover every enrolled identity')
-    encounters = [observations(row, vision) for row in rows]
+    encounters = [observations(row, vision, args.rotate) for row in rows]
     if args.command == 'calibrate':
         policy, report = fit_baseline(encounters, gallery.scores)
         policy.update(model=vision.signature, gallery=gallery.fingerprint,

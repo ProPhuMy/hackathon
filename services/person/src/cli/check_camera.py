@@ -15,7 +15,7 @@ def execute(args):
     report = dict(provider=vision.provider, decoded_frames=0, usable_single_face_frames=0, stale_frames=0, reconnects=0)
     timings = []
     started = time.monotonic()
-    with Capture(args.source) as capture:
+    with Capture(args.source, rotation=args.rotate) as capture:
         for image, received, timestamp in capture:
             if time.monotonic() - started >= args.duration:
                 break

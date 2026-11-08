@@ -35,7 +35,7 @@ def test_calibrate_and_evaluate_video_manifests_end_to_end(tmp_path, monkeypatch
         manifest.write_text('\n'.join(rows) + '\n')
         manifests[split] = manifest
     policy = tmp_path / 'policy.json'
-    args = SimpleNamespace(command='calibrate', detector=None, recognizer=None, gallery=gallery.path,
+    args = SimpleNamespace(command='calibrate', rotate=0, detector=None, recognizer=None, gallery=gallery.path,
                            manifest=manifests['development'], output=policy)
     calibrate.execute(args)
     assert json.loads(policy.read_text())['development_metrics']['known_correct'] == 2

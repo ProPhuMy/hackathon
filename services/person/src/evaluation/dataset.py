@@ -3,6 +3,7 @@ import csv
 import math
 from pathlib import Path
 import cv2
+from ..capture import rotate
 from ..storage import file_hash
 
 
@@ -45,7 +46,7 @@ def verify_disjoint(rows, previous):
             raise ValueError(f'Recording overlap by {key}; use independent encounters')
 
 
-def observations(row, vision):
+def observations(row, vision, rotation=0):
     capture = cv2.VideoCapture(row['path'])
     if not capture.isOpened():
         raise ValueError('Cannot open manifest video')
@@ -64,7 +65,7 @@ def observations(row, vision):
             if timestamp - previous < .2 - 1e-6:
                 continue
             previous = timestamp
-            result = vision.single_face(image)
+            result = vision.single_face(rotate(image, rotation))
             vector, weight = result if result is not None else (None, 0.)
             samples.append((timestamp, vector, weight))
     finally:
