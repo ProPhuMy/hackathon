@@ -267,6 +267,7 @@ def main():
         sub.add_argument('--detector', type=Path, default=Path('models/det_10g.onnx'))
         sub.add_argument('--recognizer', type=Path, default=Path('models/w600k_r50.onnx'))
         sub.add_argument('--gallery', type=Path, default=Path('models/gallery.json'))
+        sub.add_argument('--ada-gallery', type=Path, default=None, help='Separate AdaFace gallery for ensemble')
         if command in ('enroll', 'remove'):
             sub.add_argument('--person-id', required=True)
             if command == 'enroll':
