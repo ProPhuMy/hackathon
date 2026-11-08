@@ -1,0 +1,55 @@
+# Deploys infra/k8s to a throwaway k3d cluster and checks the synthetic PUT/TAKE scenario.
+name: k3d deploy check
+
+on:
+  push:
+    branches: ["main"]
+    paths: ["infra/k8s/**", "services/backend/**", "dashboard/**", "contracts/**", ".github/workflows/k3d.yml"]
+  pull_request:
+    paths: ["infra/k8s/**", "services/backend/**", "dashboard/**", "contracts/**", ".github/workflows/k3d.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: k3d-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  k3d:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install k3d
+        run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.7.4 bash
+
+      - name: Tool versions
+        run: docker --version && k3d --version && kubectl version --client && python3 --version
+
+      - name: Create cluster
+        run: ./infra/k8s/scripts/cluster-up.sh
+
+      - name: Build and import images
+        run: ./infra/k8s/scripts/build-import.sh
+
+      - name: Deploy
+        run: ./infra/k8s/scripts/deploy.sh
+
+      - name: Seed synthetic events
+        run: ./infra/k8s/scripts/seed.sh
+
+      - name: Check
+        run: ./infra/k8s/scripts/check.sh
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          source infra/k8s/scripts/common.sh
+          kc get pods,svc,jobs -o wide || true
+          kc describe pods || true
+          kc logs statefulset/redpanda --tail=100 || true
+          kc logs deployment/backend --tail=200 || true
+          kc logs job/topics-bootstrap || true
