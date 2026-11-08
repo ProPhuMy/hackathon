@@ -2,28 +2,12 @@
 import fcntl
 import hashlib
 import json
-import os
 from pathlib import Path
 import re
-import tempfile
 import uuid
 import numpy as np
 from .recognition import unit
-
-
-def atomic_json(path, value):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary = tempfile.mkstemp(dir=path.parent)
-    try:
-        with os.fdopen(descriptor, 'w') as stream:
-            json.dump(value, stream, allow_nan=False)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, path)
-    finally:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
+from .storage import atomic_json
 
 
 class Gallery:

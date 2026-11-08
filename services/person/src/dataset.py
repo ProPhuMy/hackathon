@@ -1,14 +1,9 @@
 """Encounter manifests and offline baseline evaluation; paths are manifest-relative."""
 import csv
-import hashlib
 import math
 from pathlib import Path
 import cv2
-
-
-def file_hash(path):
-    with Path(path).open('rb') as stream:
-        return hashlib.file_digest(stream, 'sha256').hexdigest()
+from .storage import atomic_json, file_hash
 
 
 def read_manifest(path, split):
@@ -80,7 +75,7 @@ def observations(row, vision):
 def execute(args):
     import json
     from .calibration import fit_baseline, measure
-    from .gallery import Gallery, atomic_json
+    from .gallery import Gallery
     from .vision import Vision
     vision = Vision(args.detector, args.recognizer)
     gallery = Gallery(args.gallery, vision.signature)

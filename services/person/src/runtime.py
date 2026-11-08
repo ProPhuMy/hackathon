@@ -1,27 +1,15 @@
 """Single-face baseline enrollment and event dispatch."""
 from datetime import datetime, timezone
-import fcntl
 import json
 from pathlib import Path
 import time
 from jsonschema import Draft202012Validator
 from .capture import Capture
 from .events import person_seen
-from .gallery import Gallery, atomic_json
+from .gallery import Gallery
 from .recognition import Baseline, decision
 from .vision import Vision
-from .dataset import file_hash
-
-
-def segment_id(path):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.with_suffix('.lock').open('a') as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        value = json.loads(path.read_text()) if path.exists() else 0
-        if type(value) is not int or value < 0:
-            raise ValueError('Invalid persistent segment counter')
-        atomic_json(path, value + 1)
-        return value
+from .storage import file_hash, segment_id
 
 
 def execute(args):

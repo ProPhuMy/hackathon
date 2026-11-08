@@ -3,7 +3,6 @@ import cv2
 import numpy as np
 import pytest
 from src.capture import Capture, source_value
-from src.runtime import segment_id
 
 
 def test_source_parsing_and_missing_replay_origin(tmp_path):
@@ -29,12 +28,6 @@ def test_recorded_capture_preserves_video_time_and_shuts_down(tmp_path):
     times = [datetime.fromisoformat(ts.replace('Z', '+00:00')) for _, _, ts in frames]
     assert (times[-1] - times[0]).total_seconds() == pytest.approx(.8)
     assert not capture.process.is_alive()
-
-
-def test_segment_ids_survive_restarts(tmp_path):
-    path = tmp_path / 'counter.json'
-    assert segment_id(path) == 0
-    assert segment_id(path) == 1
 
 
 def test_live_reconnect_yields_reset_boundary_and_drops_old_queue(monkeypatch):

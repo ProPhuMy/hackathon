@@ -1,11 +1,11 @@
 """Strict local checkpoint inference for the selected AdaFace and MagFace models."""
-import hashlib
 import pickle
 from pathlib import Path
 import numpy as np
 import torch
 from .backbones import AdaFaceIR50, MagFaceIR50
 from .recognition import unit
+from .storage import file_hash
 
 
 class _LegacyCheckpointMetadata:
@@ -79,10 +79,7 @@ class FaceEncoders:
         except RuntimeError as error:
             raise ValueError('MagFace checkpoint is incompatible with the selected iResNet50 architecture') from error
         self.magface.eval()
-        self.hashes = []
-        for path in paths:
-            with path.open('rb') as stream:
-                self.hashes.append(hashlib.file_digest(stream, 'sha256').hexdigest())
+        self.hashes = [file_hash(path) for path in paths]
         self.signature = ':'.join(self.hashes) + ':ada-bgr-neg1-mag-bgr-zero1-v1'
 
     def encode(self, aligned_bgr):

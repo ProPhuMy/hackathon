@@ -31,13 +31,13 @@ Preprocessing verified recipe:
     Scale: float32 in [0.0, 1.0] (divide by 255.0).
     Tensor shape: (1, 3, height, width).
 """
-import hashlib
 from pathlib import Path
 import cv2
 import numpy as np
 import onnxruntime as ort
 
 from .detection import FaceDetection, _valid_points
+from .storage import file_hash
 
 
 def letterbox(image, target_size=(640, 640), color=(114, 114, 114)):
@@ -110,8 +110,7 @@ class YOLO5Face:
         self.path = Path(model_path)
         if not self.path.is_file():
             raise ValueError(f"Missing local file: {self.path}. See SETUP.md; weights are never downloaded automatically.")
-        with self.path.open('rb') as stream:
-            self.sha256 = hashlib.file_digest(stream, 'sha256').hexdigest()
+        self.sha256 = file_hash(self.path)
 
         try:
             self.session = ort.InferenceSession(str(self.path), providers=['CPUExecutionProvider'])

@@ -1,11 +1,11 @@
 """Role 1 CLI. Model loading always uses explicit local files."""
 import argparse
-import hashlib
 import json
 from pathlib import Path
 import platform
 import sys
 import time
+from .storage import file_hash
 
 
 def check_models(args):
@@ -53,11 +53,8 @@ def check_models(args):
             raise ValueError('Embedding normalization failed')
         if iteration:
             latencies.append((time.perf_counter() - start) * 1000)
-    artifacts = []
-    for path in (args.detector, args.recognizer):
-        with path.open('rb') as stream:
-            digest = hashlib.file_digest(stream, 'sha256').hexdigest()
-        artifacts.append({'file': path.name, 'bytes': path.stat().st_size, 'sha256': digest})
+    artifacts = [{'file': path.name, 'bytes': path.stat().st_size, 'sha256': file_hash(path)}
+                 for path in (args.detector, args.recognizer)]
     print(json.dumps({'platform': platform.platform(), 'machine': platform.machine(),
                       'provider': 'CPUExecutionProvider', 'available_providers': ort.get_available_providers(),
                       'warm_samples': len(latencies), 'p50_ms': float(np.percentile(latencies, 50)),
@@ -223,11 +220,8 @@ def check_detectors(args):
         elif in_yolo:
             yolo_only += 1
 
-    artifacts = []
-    for path in (scrfd_path, args.yolo5face):
-        with path.open('rb') as stream:
-            digest = hashlib.file_digest(stream, 'sha256').hexdigest()
-        artifacts.append({'file': path.name, 'bytes': path.stat().st_size, 'sha256': digest})
+    artifacts = [{'file': path.name, 'bytes': path.stat().st_size, 'sha256': file_hash(path)}
+                 for path in (scrfd_path, args.yolo5face)]
 
     report = {
         'provider': 'CPUExecutionProvider',

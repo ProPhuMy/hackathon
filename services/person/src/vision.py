@@ -1,11 +1,11 @@
 """Local SCRFD/ArcFace integration; no automatic weight downloads."""
-import hashlib
 from pathlib import Path
 import cv2
 import numpy as np
 from insightface.model_zoo import get_model
 from insightface.utils.face_align import norm_crop
 from .recognition import unit
+from .storage import file_hash
 
 
 class Vision:
@@ -14,11 +14,7 @@ class Vision:
         for path in paths:
             if not path.is_file():
                 raise ValueError(f'Missing local model: {path}')
-        hashes = []
-        for path in paths:
-            with path.open('rb') as stream:
-                hashes.append(hashlib.file_digest(stream, 'sha256').hexdigest())
-        self.signature = ':'.join(hashes) + ':insightface-112-bgr-v1'
+        self.signature = ':'.join(file_hash(path) for path in paths) + ':insightface-112-bgr-v1'
         self.detector = get_model(str(paths[0]), providers=['CPUExecutionProvider'])
         self.encoder = get_model(str(paths[1]), providers=['CPUExecutionProvider'])
         self.detector.prepare(ctx_id=-1, input_size=(640, 640))
