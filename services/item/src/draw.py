@@ -92,7 +92,7 @@ def overlay(
     return display
 
 
-def video_writer(path: str | Path, frame: np.ndarray) -> cv2.VideoWriter:
-    """MP4 writer at 15 fps sized to `frame` (the first frame of the stream)."""
+def video_writer(path: str | Path, frame: np.ndarray, fps: float = 15.0) -> cv2.VideoWriter:
+    """MP4 writer at `fps` sized to `frame` (the first frame of the stream)."""
     h, w = frame.shape[:2]
-    return cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), 15.0, (w, h))
+    return cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
