@@ -199,6 +199,21 @@ def run_command(
                 writer.release()
 
 
+def evaluate_command(
+    labels_path: str = "data/labels.csv",
+    clips_dir: str = "data/clips",
+    config_path: str = "config.json",
+) -> dict[str, int]:
+    """Evaluate item recognition pipeline against labeled clips."""
+    from fridge_item.evaluate import evaluate_command as run_evaluate
+
+    return run_evaluate(
+        labels_path=labels_path,
+        clips_dir=clips_dir,
+        config_path=config_path,
+    )
+
+
 
 
 def parse_args(args: list[str] | None = None) -> argparse.Namespace:
@@ -262,6 +277,25 @@ def parse_args(args: list[str] | None = None) -> argparse.Namespace:
         help="Output overlay video MP4 path",
     )
 
+    evaluate_parser = subparsers.add_parser(
+        "evaluate", help="Evaluate item recognition pipeline against labeled clips"
+    )
+    evaluate_parser.add_argument(
+        "--labels",
+        default="data/labels.csv",
+        help="Path to labels CSV (default: data/labels.csv)",
+    )
+    evaluate_parser.add_argument(
+        "--clips",
+        default="data/clips",
+        help="Path to directory containing clips (default: data/clips)",
+    )
+    evaluate_parser.add_argument(
+        "--config",
+        default="config.json",
+        help="Path to config JSON (default: config.json)",
+    )
+
     return parser.parse_args(args)
 
 
@@ -281,6 +315,12 @@ def main(args: list[str] | None = None) -> None:
             broker=parsed.broker,
             dry_run=parsed.dry_run,
             debug_video=parsed.debug_video,
+        )
+    elif parsed.subcommand == "evaluate":
+        evaluate_command(
+            labels_path=parsed.labels,
+            clips_dir=parsed.clips,
+            config_path=parsed.config,
         )
 
 
