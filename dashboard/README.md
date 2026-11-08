@@ -49,12 +49,23 @@ through `Food_5` carry item indices. The renderer remains lazy-loaded. Vite emit
 `node tools/checks/model-asset.mjs` verifies the production artifact after a build.
 WebGL/model errors retain the photograph and inventory access.
 
-`src/fridgeMotion.mjs` defines the reversible camera path. The door clears before
-the camera moves through the opening. Each shelf has its own close-up viewpoint;
-portrait framing backs away slightly to keep both food items visible. Hover adds
-a subtle scale response, and the inside camera has restrained pointer parallax.
-Run `node tools/checks/fridge-motion.mjs` for reversal, reduced-motion, camera
-clearance, aspect ratio, and exported-model checks.
+`src/spaceJourney.mjs` defines the reversible space journey playhead. A single
+`progress` value (0→1, ~9 s forward, ~4.5 s return) drives the fridge through a
+wormhole portal into a new region of space, opens the door, and ejects items into
+a floating cloud. The camera never enters the fridge interior. `sampleJourney`
+returns camera, fridge, door, portal, tunnel, and item-release poses for every
+progress value and aspect ratio. `advanceJourney` handles forward, reverse,
+background-tab resume, and reduced-motion instant jumps. In dev mode, appending
+`?progress=<0..1>` freezes the playhead at that exact progress for inspection.
+
+`src/Fridge3D.jsx` consumes the sample every frame and applies it to the model,
+items, and FX components. Items with demo slot mappings use the GLB food meshes;
+other items get generated geometry. Hover shows a name tag; click opens the item
+detail route. Clicking the fridge at idle triggers the journey.
+
+Run `node tools/checks/space-journey.mjs` for playhead reversal, phase boundaries,
+camera continuity, door timing, item release, aspect-ratio coverage, and
+GLB-structure checks.
 
 The editable Blender source and rebuild scripts are in `tools/blender/`.
 Blender must be running with its MCP addon listening on loopback port 9876.
