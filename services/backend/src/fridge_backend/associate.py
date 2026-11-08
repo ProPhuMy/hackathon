@@ -176,6 +176,16 @@ def assign(
     Events are internally sorted by (ts_ms, event_id), and results are returned
     in that sorted order.
 
+    Modes:
+      - "jpda": Chooses the person_id key with the largest group marginal, summing
+        candidate marginals over all options sharing the same person_id (None groups
+        the null option with all stranger tracks). Ties are broken: None first, then
+        person_id ascending. Confidence is round(group_marginal * item_confidence, 4).
+      - "hungarian": Selects the best joint assignment hypothesis maximizing total score
+        (same score and tie rule as before). For each event j, its person_id is that
+        of the winning hypothesis option, and its confidence is
+        round(group marginal of that person_id * item_confidence, 4).
+
     Args:
         events: list of (ts_ms, event_dict) tuples.
         persons: list of (ts_ms, person_dict) tuples.
@@ -208,19 +218,26 @@ def assign(
             item_conf = float(ev_dict["confidence"])
             ev_marginals = marginals[j]
 
-            # Ties: null first, then lowest track_id
-            def _jpda_key(opt: CandidateOption) -> tuple[float, int, int]:
-                m_val = ev_marginals[opt]
-                return (
-                    -m_val,
-                    0 if opt.track_id is None else 1,
-                    opt.track_id if opt.track_id is not None else -1,
-                )
+            # Group marginal of key k = sum of ev_marginals[opt] for opt.person_id == k
+            # The key None groups the null option together with every stranger track (person_id None).
+            group_marginals: dict[str | None, float] = {}
+            for opt in candidates_per_event[j]:
+                k = opt.person_id
+                group_marginals[k] = group_marginals.get(k, 0.0) + ev_marginals[opt]
 
-            best_opt = min(candidates_per_event[j], key=_jpda_key)
-            chosen_marginal = ev_marginals[best_opt]
-            conf = round(chosen_marginal * item_conf, 4)
-            results.append((best_opt.person_id, conf))
+            # Chosen person_id has largest group marginal.
+            # Ties: None first, then person_id ascending.
+            best_key = min(
+                group_marginals.keys(),
+                key=lambda k: (
+                    -group_marginals[k],
+                    0 if k is None else 1,
+                    "" if k is None else k,
+                ),
+            )
+            chosen_group_marginal = group_marginals[best_key]
+            conf = round(chosen_group_marginal * item_conf, 4)
+            results.append((best_key, conf))
 
     elif mode == "hungarian":
         def _hungarian_key(idx: int) -> tuple[float, tuple[int, ...]]:
@@ -234,8 +251,15 @@ def assign(
         for j, (_, ev_dict) in enumerate(sorted_events):
             item_conf = float(ev_dict["confidence"])
             chosen_opt = best_h[j]
-            chosen_marginal = marginals[j][chosen_opt]
-            conf = round(chosen_marginal * item_conf, 4)
-            results.append((chosen_opt.person_id, conf))
+            chosen_pid = chosen_opt.person_id
+
+            # Group marginal of chosen_pid
+            group_marginal = sum(
+                opt_marginal
+                for opt, opt_marginal in marginals[j].items()
+                if opt.person_id == chosen_pid
+            )
+            conf = round(group_marginal * item_conf, 4)
+            results.append((chosen_pid, conf))
 
     return results

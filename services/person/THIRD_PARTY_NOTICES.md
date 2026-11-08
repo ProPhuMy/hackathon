@@ -1,6 +1,6 @@
 # Inference backbone attribution
 
-`src/fridge_person/backbones.py` adapts only the inference architectures needed by
+`src/vision/backbones.py` adapts only the inference architectures needed by
 our selected checkpoints, retaining their module/state-dictionary names. Unused
 architectures, training initialization, and training-framework dependencies were
 omitted. No checkpoint files are redistributed.

@@ -7,7 +7,7 @@ from fridge_backend import associate
 from fridge_backend import consistency
 from fridge_backend.events import fridge_event
 
-MATCHER_VERSION = "3-jpda"  # stored with Codex's replay journal; bump on any change to matching behavior
+MATCHER_VERSION = "4-person-marginal"  # stored with Codex's replay journal; bump on any change to matching behavior
 
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
