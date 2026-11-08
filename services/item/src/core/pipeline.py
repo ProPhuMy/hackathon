@@ -1,6 +1,8 @@
+"""Per-frame driver: door state -> detection -> hand crossings -> gallery-resolved item events."""
 from __future__ import annotations
 
 from typing import Callable
+
 import numpy as np
 
 from ..config import Config
@@ -46,43 +48,26 @@ class ItemPipeline:
         if not is_open:
             self.tracks = []
             return self.close()
+
+        if self.session is None:
+            self.session = DoorSession(self.cfg.line)
+            self._reset_session_state()
+
+        tracks = self.detect(frame)
+        self.tracks = tracks
+        self._last_open_ts = ts
+
+        item_tracks = [t for t in tracks if t.kind == "item"]
+        if any(t.kind == "hand" for t in tracks):
+            self._last_hand_ts = ts
         else:
-            if self.session is None:
-                self.session = DoorSession(self.cfg.line)
-                self._shelf_before = None
-                self._shelf_after = None
-                self._last_hand_ts = None
-                self._last_open_ts = None
-                self._emitted_put_labels.clear()
-                self._emitted_take_labels.clear()
+            if self._shelf_before is None:
+                self._shelf_before = list(item_tracks)
+            self._shelf_after = list(item_tracks)
 
-            tracks = self.detect(frame)
-            self.tracks = tracks
-            self._last_open_ts = ts
-
-            has_hand = any(t.kind == "hand" for t in tracks)
-            if has_hand:
-                self._last_hand_ts = ts
-            else:
-                items = [t for t in tracks if t.kind == "item"]
-                if self._shelf_before is None:
-                    self._shelf_before = list(items)
-                self._shelf_after = list(items)
-
-            item_tracks = [t for t in tracks if t.kind == "item"]
-            masks = (
-                self.segment(frame, item_tracks)
-                if self.segment is not None
-                else None
-            )
-            trips = self.session.update(tracks, ts, frame, masks=masks)
-            events = self._trips_to_events(trips)
-            for ev in events:
-                if ev["type"] == "PUT":
-                    self._emitted_put_labels.add(ev["item_label"])
-                elif ev["type"] == "TAKE":
-                    self._emitted_take_labels.add(ev["item_label"])
-            return events
+        masks = self.segment(frame, item_tracks) if self.segment is not None else None
+        trips = self.session.update(tracks, ts, frame, masks=masks)
+        return self._trips_to_events(trips)
 
     def close(self) -> list[dict]:
         """Flush and close any open door session, returning the resulting events."""
@@ -90,11 +75,6 @@ class ItemPipeline:
             trips = self.session.close()
             self.session = None
             events = self._trips_to_events(trips)
-            for ev in events:
-                if ev["type"] == "PUT":
-                    self._emitted_put_labels.add(ev["item_label"])
-                elif ev["type"] == "TAKE":
-                    self._emitted_take_labels.add(ev["item_label"])
 
             if (
                 self.shelf_check
@@ -103,42 +83,28 @@ class ItemPipeline:
             ):
                 added, removed = shelf_diff(self._shelf_before, self._shelf_after)
                 shelf_ts = self._last_hand_ts or self._last_open_ts or ""
-                shelf_trips: list[Trip] = []
-                for item in added:
-                    if item.label not in self._emitted_put_labels:
-                        shelf_trips.append(
-                            Trip(
-                                type="PUT",
-                                item=item,
-                                ts=shelf_ts,
-                                crop=None,
-                                confidence=0.3,
-                            )
-                        )
-                for item in removed:
-                    if item.label not in self._emitted_take_labels:
-                        shelf_trips.append(
-                            Trip(
-                                type="TAKE",
-                                item=item,
-                                ts=shelf_ts,
-                                crop=None,
-                                confidence=0.3,
-                            )
-                        )
-                if shelf_trips:
-                    shelf_events = self._trips_to_events(shelf_trips)
-                    events.extend(shelf_events)
+                shelf_trips = [
+                    Trip(type="PUT", item=item, ts=shelf_ts, crop=None, confidence=0.3)
+                    for item in added
+                    if item.label not in self._emitted_put_labels
+                ] + [
+                    Trip(type="TAKE", item=item, ts=shelf_ts, crop=None, confidence=0.3)
+                    for item in removed
+                    if item.label not in self._emitted_take_labels
+                ]
+                events.extend(self._trips_to_events(shelf_trips))
 
-            self._shelf_before = None
-            self._shelf_after = None
-            self._last_hand_ts = None
-            self._last_open_ts = None
-            self._emitted_put_labels.clear()
-            self._emitted_take_labels.clear()
+            self._reset_session_state()
             return events
         return []
 
+    def _reset_session_state(self) -> None:
+        self._shelf_before = None
+        self._shelf_after = None
+        self._last_hand_ts = None
+        self._last_open_ts = None
+        self._emitted_put_labels.clear()
+        self._emitted_take_labels.clear()
 
     def _trips_to_events(self, trips: list[Trip]) -> list[dict]:
         trip_embs: list[np.ndarray | None] = []
@@ -187,14 +153,11 @@ class ItemPipeline:
         for i, trip in enumerate(trips):
             if trip.type == "PUT":
                 item_id, confidence = put_results[i]
-            elif trip.type == "TAKE":
-                item_id, score = take_results[i]
-                if item_id == "unknown":
-                    confidence = 0.1
-                else:
-                    confidence = trip.confidence * score
+                self._emitted_put_labels.add(trip.item.label)
             else:
-                continue
+                item_id, score = take_results[i]
+                confidence = 0.1 if item_id == "unknown" else trip.confidence * score
+                self._emitted_take_labels.add(trip.item.label)
 
             confidence = max(0.0, min(1.0, float(confidence)))
             events.append(

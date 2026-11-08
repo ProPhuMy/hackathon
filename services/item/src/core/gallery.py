@@ -1,10 +1,24 @@
+"""Persistent JSON gallery of items currently in the fridge; TAKEs are matched by label or embedding."""
 from __future__ import annotations
 
 import json
 import os
 from pathlib import Path
 from uuid import uuid4
+
 import numpy as np
+
+
+def _cosine(q_vec: np.ndarray, stored: list[float]) -> float:
+    """Cosine similarity clipped to [0, 1]; 0 for zero vectors or mismatched lengths."""
+    s_vec = np.asarray(stored, dtype=float)
+    q_norm = np.linalg.norm(q_vec)
+    s_norm = np.linalg.norm(s_vec)
+    if q_norm > 0 and s_norm > 0 and len(q_vec) == len(s_vec):
+        cos = float(np.dot(q_vec, s_vec) / (q_norm * s_norm))
+    else:
+        cos = 0.0
+    return max(0.0, min(1.0, cos))
 
 
 class ItemGallery:
@@ -77,16 +91,9 @@ class ItemGallery:
 
         if embedding is not None and emb_items:
             q_vec = np.asarray(embedding, dtype=float)
-            q_norm = np.linalg.norm(q_vec)
             scored = []
             for orig_idx, item in emb_items:
-                s_vec = np.asarray(item["embedding"], dtype=float)
-                s_norm = np.linalg.norm(s_vec)
-                if q_norm > 0 and s_norm > 0 and len(q_vec) == len(s_vec):
-                    cos = float(np.dot(q_vec, s_vec) / (q_norm * s_norm))
-                else:
-                    cos = 0.0
-                score = max(0.0, min(1.0, cos))
+                score = _cosine(q_vec, item["embedding"])
                 # Tie-breaking key: max score, prefer same label, then oldest (lowest orig_idx)
                 key = (score, 1 if item.get("label") == label else 0, -orig_idx)
                 scored.append((key, orig_idx, score))
@@ -128,20 +135,13 @@ class ItemGallery:
         m = len(emb_items)
         cost_matrix = np.zeros((n, m), dtype=float)
 
-        for i, (q_label, q_emb) in enumerate(queries):
+        for i, (_, q_emb) in enumerate(queries):
             if q_emb is None:
                 cost_matrix[i, :] = 1.0
                 continue
             q_vec = np.asarray(q_emb, dtype=float)
-            q_norm = np.linalg.norm(q_vec)
             for j, (_, item) in enumerate(emb_items):
-                s_vec = np.asarray(item["embedding"], dtype=float)
-                s_norm = np.linalg.norm(s_vec)
-                if q_norm > 0 and s_norm > 0 and len(q_vec) == len(s_vec):
-                    cos = float(np.dot(q_vec, s_vec) / (q_norm * s_norm))
-                else:
-                    cos = 0.0
-                cost_matrix[i, j] = 1.0 - max(0.0, min(1.0, cos))
+                cost_matrix[i, j] = 1.0 - _cosine(q_vec, item["embedding"])
 
         row_ind, col_ind = linear_sum_assignment(cost_matrix)
         results: list[tuple[str, float]] = [("unknown", 0.0)] * n

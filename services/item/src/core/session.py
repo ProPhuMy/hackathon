@@ -1,31 +1,36 @@
-from dataclasses import dataclass
+"""Door session: pairs a hand's in/out crossings of the door line into PUT/TAKE trips."""
+from dataclasses import dataclass, field
 from typing import Literal
+
 import numpy as np
+
 from .geometry import DoorLine, Track, held_item
 
 
+def _same_crop(a: np.ndarray | None, b: np.ndarray | None) -> bool:
+    if a is None or b is None:
+        return a is b
+    return bool(np.array_equal(a, b))
+
+
+# The custom __eq__ compares crops by content; hash=False keeps the generated __hash__
+# off the ndarray (and off `hand`, which __eq__ ignores when either side is None).
 @dataclass(frozen=True)
 class Crossing:
     direction: Literal["in", "out"]
     held: Track | None
     ts: str
-    crop: np.ndarray | None
-    hand: Track | None = None
+    crop: np.ndarray | None = field(hash=False)
+    hand: Track | None = field(default=None, hash=False)
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Crossing):
             return False
-        if (self.direction, self.held, self.ts) != (
-            other.direction,
-            other.held,
-            other.ts,
-        ):
+        if (self.direction, self.held, self.ts) != (other.direction, other.held, other.ts):
             return False
-        if (self.hand is not None and other.hand is not None) and self.hand != other.hand:
+        if self.hand is not None and other.hand is not None and self.hand != other.hand:
             return False
-        if self.crop is None or other.crop is None:
-            return self.crop is other.crop
-        return bool(np.array_equal(self.crop, other.crop))
+        return _same_crop(self.crop, other.crop)
 
 
 @dataclass(frozen=True)
@@ -33,7 +38,7 @@ class Trip:
     type: Literal["PUT", "TAKE"]
     item: Track
     ts: str
-    crop: np.ndarray | None
+    crop: np.ndarray | None = field(hash=False)
     confidence: float
 
     def __eq__(self, other: object) -> bool:
@@ -46,9 +51,14 @@ class Trip:
             other.confidence,
         ):
             return False
-        if self.crop is None or other.crop is None:
-            return self.crop is other.crop
-        return bool(np.array_equal(self.crop, other.crop))
+        return _same_crop(self.crop, other.crop)
+
+
+def _trip(type: Literal["PUT", "TAKE"], crossing: Crossing) -> Trip:
+    """Trip for the crossing that carried the item; confidence = min(hand, item)."""
+    held = crossing.held
+    conf = min(crossing.hand.conf, held.conf) if crossing.hand is not None else held.conf
+    return Trip(type=type, item=held, ts=crossing.ts, crop=crossing.crop, confidence=conf)
 
 
 class DoorSession:
@@ -93,7 +103,7 @@ class DoorSession:
                 if hand.id not in self.hand_crops or self.hand_crops[hand.id][0] != held.id:
                     self.hand_crops[hand.id] = (held.id, area, crop)
                 else:
-                    prev_id, prev_area, prev_crop = self.hand_crops[hand.id]
+                    prev_area = self.hand_crops[hand.id][1]
                     if crop is not None and area > prev_area:
                         self.hand_crops[hand.id] = (held.id, area, crop)
 
@@ -148,51 +158,14 @@ class DoorSession:
 
     def _pair(self, c_in: Crossing, c_out: Crossing) -> Trip | None:
         if c_in.held is not None and c_out.held is None:
-            conf = min(c_in.hand.conf, c_in.held.conf) if c_in.hand is not None else c_in.held.conf
-            return Trip(
-                type="PUT",
-                item=c_in.held,
-                ts=c_in.ts,
-                crop=c_in.crop,
-                confidence=conf,
-            )
+            return _trip("PUT", c_in)
         if c_in.held is None and c_out.held is not None:
-            conf = min(c_out.hand.conf, c_out.held.conf) if c_out.hand is not None else c_out.held.conf
-            return Trip(
-                type="TAKE",
-                item=c_out.held,
-                ts=c_out.ts,
-                crop=c_out.crop,
-                confidence=conf,
-            )
+            return _trip("TAKE", c_out)
         return None
 
     def close(self) -> list[Trip]:
-        trips: list[Trip] = []
-        for c_in in self.pending_in:
-            if c_in.held is not None:
-                conf = min(c_in.hand.conf, c_in.held.conf) if c_in.hand is not None else c_in.held.conf
-                trips.append(
-                    Trip(
-                        type="PUT",
-                        item=c_in.held,
-                        ts=c_in.ts,
-                        crop=c_in.crop,
-                        confidence=conf,
-                    )
-                )
-        for c_out in self.pending_out:
-            if c_out.held is not None:
-                conf = min(c_out.hand.conf, c_out.held.conf) if c_out.hand is not None else c_out.held.conf
-                trips.append(
-                    Trip(
-                        type="TAKE",
-                        item=c_out.held,
-                        ts=c_out.ts,
-                        crop=c_out.crop,
-                        confidence=conf,
-                    )
-                )
+        trips = [_trip("PUT", c) for c in self.pending_in if c.held is not None]
+        trips += [_trip("TAKE", c) for c in self.pending_out if c.held is not None]
         self.pending_in.clear()
         self.pending_out.clear()
         self.hand_sides.clear()
