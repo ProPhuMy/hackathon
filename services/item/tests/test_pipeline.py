@@ -223,6 +223,61 @@ def test_embed_called_when_provided(tmp_path: Path):
     assert crop_arg.size > 0
 
 
+def test_pipeline_two_takes_resolved_with_take_many(tmp_path: Path):
+    line = DoorLine(p1=(0.0, 100.0), p2=(200.0, 100.0), inside=(100.0, 200.0))
+    cfg = Config(roi=(0, 0, 50, 50), line=line, door_on=100.0, door_off=50.0)
+    gallery = ItemGallery(tmp_path / "gallery.json")
+
+    id1 = gallery.add("bottle", embedding=np.array([1.0, 0.0]))
+    id2 = gallery.add("bottle", embedding=np.array([0.0, 1.0]))
+
+    # Hand 1 holding bottle (id 10), Hand 2 holding bottle (id 20)
+    # Hand 1 crop gives [0.1, 0.9] (matches id2)
+    # Hand 2 crop gives [0.9, 0.1] (matches id1)
+    def fake_embed(crop: np.ndarray) -> np.ndarray:
+        if crop[0, 0, 0] == 10:
+            return np.array([0.1, 0.9])
+        return np.array([0.9, 0.1])
+
+    # Script:
+    # Frame 0: Hands outside empty
+    # Frame 1: Hands inside empty (crossing in)
+    # Frame 2: Hands outside holding bottles (crossing out -> 2 TAKEs!)
+    frame1 = np.full((300, 300, 3), 200, dtype=np.uint8)
+    frame1[40:60, 40:60] = 10  # bottle 10 at y=50, x=50
+    frame1[40:60, 140:160] = 20  # bottle 20 at y=50, x=150
+
+    script = [
+        # Call 0: Hands outside empty
+        [hand(1, 50.0, 50.0), hand(2, 150.0, 50.0)],
+        # Call 1: Hands inside empty
+        [hand(1, 50.0, 150.0), hand(2, 150.0, 150.0)],
+        # Call 2: Hands outside holding items
+        [
+            hand(1, 50.0, 50.0),
+            Track(10, "item", Box(40.0, 40.0, 60.0, 60.0), 0.9, "bottle"),
+            hand(2, 150.0, 50.0),
+            Track(20, "item", Box(140.0, 40.0, 160.0, 60.0), 0.9, "bottle"),
+        ],
+    ]
+    detector = ScriptedDetector(script)
+    pipeline = ItemPipeline(cfg=cfg, detect=detector, gallery=gallery, embed=fake_embed)
+
+    pipeline.process(frame1, ts="2026-11-07T20:00:00.000Z")
+    pipeline.process(frame1, ts="2026-11-07T20:00:01.000Z")
+    events = pipeline.process(frame1, ts="2026-11-07T20:00:02.000Z")
+
+    assert len(events) == 2
+    assert events[0]["type"] == "TAKE"
+    assert events[1]["type"] == "TAKE"
+    # Hand 1 held bottle 10 (crop pixel 10 -> embedding [0.1, 0.9] -> matches id2)
+    assert events[0]["item_id"] == id2
+    # Hand 2 held bottle 20 (crop pixel 20 -> embedding [0.9, 0.1] -> matches id1)
+    assert events[1]["item_id"] == id1
+    assert gallery.items() == {}
+
+
+
 def test_cli_parse_args():
     from fridge_item.__main__ import parse_args
 
@@ -234,6 +289,7 @@ def test_cli_parse_args():
     assert args.broker == "localhost:19092"
     assert args.dry_run is True
     assert args.debug_video is None
+    assert args.embed is False
 
     args2 = parse_args(
         [
@@ -248,6 +304,7 @@ def test_cli_parse_args():
             "10.0.0.1:9092",
             "--debug-video",
             "out.mp4",
+            "--embed",
         ]
     )
     assert args2.source == "http://192.168.1.10:8080/video"
@@ -256,6 +313,49 @@ def test_cli_parse_args():
     assert args2.broker == "10.0.0.1:9092"
     assert args2.dry_run is False
     assert args2.debug_video == "out.mp4"
+    assert args2.embed is True
+
+    args_eval = parse_args(["evaluate", "--embed"])
+    assert args_eval.subcommand == "evaluate"
+    assert args_eval.embed is True
+
+
+def test_cli_run_command_with_embed(tmp_path: Path, monkeypatch, capsys):
+    from fridge_item.__main__ import run_command
+    from fridge_item.config import Config, save
+    from fridge_item.events import item_event
+
+    cfg_file = tmp_path / "cfg.json"
+    line = DoorLine(p1=(0.0, 100.0), p2=(200.0, 100.0), inside=(100.0, 200.0))
+    save(Config(roi=(0, 0, 50, 50), line=line, door_on=100.0, door_off=50.0), cfg_file)
+
+    test_ev = item_event("PUT", "item_123", "bottle", 0.9, ts="2026-11-07T20:00:01.000Z")
+    frame = np.full((300, 300, 3), 10, dtype=np.uint8)
+
+    mock_embedder_instance = MagicMock()
+    mock_embedder_cls = MagicMock(return_value=mock_embedder_instance)
+    monkeypatch.setattr("fridge_item.embed.Embedder", mock_embedder_cls)
+
+    monkeypatch.setattr("fridge_item.detect.Detector", MagicMock())
+    monkeypatch.setattr(
+        "fridge_item.__main__.iter_frames",
+        lambda src: [(frame, "2026-11-07T20:00:01.000Z")],
+    )
+    monkeypatch.setattr(
+        "fridge_item.pipeline.ItemPipeline.process",
+        lambda self, f, ts: [test_ev],
+    )
+
+    run_command(
+        source="dummy_src",
+        config_path=str(cfg_file),
+        gallery_path=str(tmp_path / "gallery.json"),
+        dry_run=True,
+        embed=True,
+    )
+
+    mock_embedder_cls.assert_called_once()
+
 
 
 def test_cli_run_command_dry_run(tmp_path: Path, monkeypatch, capsys):

@@ -119,3 +119,57 @@ def test_evaluate_missing_clip_raises_file_not_found(tmp_path: Path):
         )
 
     assert "nonexistent.mp4" in str(exc_info.value)
+
+
+def test_evaluate_with_embed_instantiates_embedder_once(tmp_path: Path, monkeypatch):
+    labels_file = tmp_path / "labels.csv"
+    labels_file.write_text("clip1.mp4,PUT,juice\nclip2.mp4,TAKE,juice\n")
+
+    clips_dir = tmp_path / "clips"
+    clips_dir.mkdir()
+    (clips_dir / "clip1.mp4").touch()
+    (clips_dir / "clip2.mp4").touch()
+
+    cfg_file = tmp_path / "config.json"
+    save(
+        Config(
+            roi=(0, 0, 10, 10),
+            line=DoorLine((0, 5), (10, 5), (5, 0)),
+            door_on=100.0,
+            door_off=50.0,
+            prompts=["juice"],
+            hand_label="hand",
+        ),
+        cfg_file,
+    )
+
+    monkeypatch.setattr("fridge_item.stream.iter_frames", lambda src: iter([]))
+    mock_embedder_instance = MagicMock()
+    mock_embedder_cls = MagicMock(return_value=mock_embedder_instance)
+    monkeypatch.setattr("fridge_item.embed.Embedder", mock_embedder_cls)
+
+    pipelines_built = []
+    real_init = None
+
+    from fridge_item.pipeline import ItemPipeline
+    original_init = ItemPipeline.__init__
+
+    def spy_init(self, *args, **kwargs):
+        original_init(self, *args, **kwargs)
+        pipelines_built.append(self)
+
+    monkeypatch.setattr("fridge_item.pipeline.ItemPipeline.__init__", spy_init)
+
+    evaluate_command(
+        labels_path=str(labels_file),
+        clips_dir=str(clips_dir),
+        config_path=str(cfg_file),
+        detector_factory=lambda prompts, hand_label: MagicMock(),
+        embed=True,
+    )
+
+    mock_embedder_cls.assert_called_once()
+    assert len(pipelines_built) == 2
+    assert pipelines_built[0].embed is mock_embedder_instance
+    assert pipelines_built[1].embed is mock_embedder_instance
+

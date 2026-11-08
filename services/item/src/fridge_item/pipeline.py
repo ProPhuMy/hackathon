@@ -53,17 +53,39 @@ class ItemPipeline:
 
 
     def _trips_to_events(self, trips: list[Trip]) -> list[dict]:
-        events: list[dict] = []
+        trip_embs: list[np.ndarray | None] = []
         for trip in trips:
             emb = None
             if self.embed is not None and trip.crop is not None:
                 emb = self.embed(trip.crop)
+            trip_embs.append(emb)
 
+        take_indices = [
+            i
+            for i, (trip, emb) in enumerate(zip(trips, trip_embs))
+            if trip.type == "TAKE" and emb is not None
+        ]
+        take_results: dict[int, tuple[str, float]] = {}
+
+        events: list[dict] = []
+        for i, (trip, emb) in enumerate(zip(trips, trip_embs)):
             if trip.type == "PUT":
                 item_id = self.gallery.add(trip.item.label, emb)
                 confidence = trip.confidence
             elif trip.type == "TAKE":
-                item_id, score = self.gallery.take(trip.item.label, emb)
+                if len(take_indices) >= 2:
+                    if not take_results:
+                        queries = [
+                            (trips[idx].item.label, trip_embs[idx])  # type: ignore[arg-type]
+                            for idx in take_indices
+                        ]
+                        matches = self.gallery.take_many(queries)
+                        for idx, match in zip(take_indices, matches):
+                            take_results[idx] = match
+                    item_id, score = take_results[i]
+                else:
+                    item_id, score = self.gallery.take(trip.item.label, emb)
+
                 if item_id == "unknown":
                     confidence = 0.1
                 else:

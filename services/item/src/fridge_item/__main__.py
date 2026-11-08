@@ -83,6 +83,7 @@ def run_command(
     broker: str = "localhost:19092",
     dry_run: bool = False,
     debug_video: str | None = None,
+    embed: bool = False,
 ) -> None:
     """Run item recognition pipeline, printing events, publishing to Kafka, and tracking latency."""
     from fridge_item.config import load
@@ -94,6 +95,12 @@ def run_command(
     cfg = load(config_path)
     gallery = ItemGallery(gallery_path)
     detector = Detector(prompts=cfg.prompts, hand_label=cfg.hand_label)
+
+    embedder = None
+    if embed:
+        from fridge_item.embed import Embedder
+
+        embedder = Embedder()
 
     producer = None
     if not dry_run:
@@ -110,7 +117,9 @@ def run_command(
         detect_times.append((time.perf_counter() - t0) * 1000.0)
         return tracks
 
-    pipeline = ItemPipeline(cfg=cfg, detect=timed_detect, gallery=gallery)
+    pipeline = ItemPipeline(
+        cfg=cfg, detect=timed_detect, gallery=gallery, embed=embedder
+    )
 
     writer: cv2.VideoWriter | None = None
     recent_events: list[dict] = []
@@ -204,6 +213,7 @@ def evaluate_command(
     clips_dir: str = "data/clips",
     config_path: str = "config.json",
     detector_factory=None,
+    embed: bool = False,
 ) -> dict[str, int]:
     """Evaluate item recognition pipeline against labeled clips."""
     from fridge_item.evaluate import evaluate_command as run_evaluate
@@ -213,6 +223,7 @@ def evaluate_command(
         clips_dir=clips_dir,
         config_path=config_path,
         detector_factory=detector_factory,
+        embed=embed,
     )
 
 
@@ -278,6 +289,11 @@ def parse_args(args: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Output overlay video MP4 path",
     )
+    run_parser.add_argument(
+        "--embed",
+        action="store_true",
+        help="Use visual embeddings and Hungarian matching",
+    )
 
     evaluate_parser = subparsers.add_parser(
         "evaluate", help="Evaluate item recognition pipeline against labeled clips"
@@ -296,6 +312,11 @@ def parse_args(args: list[str] | None = None) -> argparse.Namespace:
         "--config",
         default="config.json",
         help="Path to config JSON (default: config.json)",
+    )
+    evaluate_parser.add_argument(
+        "--embed",
+        action="store_true",
+        help="Use visual embeddings and Hungarian matching",
     )
 
     return parser.parse_args(args)
@@ -317,12 +338,14 @@ def main(args: list[str] | None = None) -> None:
             broker=parsed.broker,
             dry_run=parsed.dry_run,
             debug_video=parsed.debug_video,
+            embed=parsed.embed,
         )
     elif parsed.subcommand == "evaluate":
         evaluate_command(
             labels_path=parsed.labels,
             clips_dir=parsed.clips,
             config_path=parsed.config,
+            embed=parsed.embed,
         )
 
 

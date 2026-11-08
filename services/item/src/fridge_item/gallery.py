@@ -69,6 +69,33 @@ class ItemGallery:
         if not self._items:
             return ("unknown", 0.0)
 
+        emb_items = [
+            (idx, item)
+            for idx, item in enumerate(self._items)
+            if item.get("embedding") is not None
+        ]
+
+        if embedding is not None and emb_items:
+            q_vec = np.asarray(embedding, dtype=float)
+            q_norm = np.linalg.norm(q_vec)
+            scored = []
+            for orig_idx, item in emb_items:
+                s_vec = np.asarray(item["embedding"], dtype=float)
+                s_norm = np.linalg.norm(s_vec)
+                if q_norm > 0 and s_norm > 0 and len(q_vec) == len(s_vec):
+                    cos = float(np.dot(q_vec, s_vec) / (q_norm * s_norm))
+                else:
+                    cos = 0.0
+                score = max(0.0, min(1.0, cos))
+                # Tie-breaking key: max score, prefer same label, then oldest (lowest orig_idx)
+                key = (score, 1 if item.get("label") == label else 0, -orig_idx)
+                scored.append((key, orig_idx, score))
+
+            best = max(scored, key=lambda x: x[0])
+            matched = self._items.pop(best[1])
+            self._save()
+            return (matched["id"], best[2])
+
         # Oldest item with matching label (items are in insertion order)
         for idx, item in enumerate(self._items):
             if item.get("label") == label:
@@ -80,6 +107,59 @@ class ItemGallery:
         matched = self._items.pop(0)
         self._save()
         return (matched["id"], 0.3)
+
+    def take_many(
+        self, queries: list[tuple[str, np.ndarray]]
+    ) -> list[tuple[str, float]]:
+        if not queries:
+            return []
+
+        emb_items = [
+            (idx, item)
+            for idx, item in enumerate(self._items)
+            if item.get("embedding") is not None
+        ]
+        if not emb_items:
+            return [self.take(label, None) for label, _ in queries]
+
+        from scipy.optimize import linear_sum_assignment
+
+        n = len(queries)
+        m = len(emb_items)
+        cost_matrix = np.zeros((n, m), dtype=float)
+
+        for i, (q_label, q_emb) in enumerate(queries):
+            if q_emb is None:
+                cost_matrix[i, :] = 1.0
+                continue
+            q_vec = np.asarray(q_emb, dtype=float)
+            q_norm = np.linalg.norm(q_vec)
+            for j, (_, item) in enumerate(emb_items):
+                s_vec = np.asarray(item["embedding"], dtype=float)
+                s_norm = np.linalg.norm(s_vec)
+                if q_norm > 0 and s_norm > 0 and len(q_vec) == len(s_vec):
+                    cos = float(np.dot(q_vec, s_vec) / (q_norm * s_norm))
+                else:
+                    cos = 0.0
+                cost_matrix[i, j] = 1.0 - max(0.0, min(1.0, cos))
+
+        row_ind, col_ind = linear_sum_assignment(cost_matrix)
+        results: list[tuple[str, float]] = [("unknown", 0.0)] * n
+        indices_to_remove: set[int] = set()
+
+        for r, c in zip(row_ind, col_ind):
+            orig_idx, item = emb_items[c]
+            clipped_cos = max(0.0, min(1.0, 1.0 - cost_matrix[r, c]))
+            results[r] = (item["id"], float(clipped_cos))
+            indices_to_remove.add(orig_idx)
+
+        self._items = [
+            item
+            for idx, item in enumerate(self._items)
+            if idx not in indices_to_remove
+        ]
+        self._save()
+        return results
 
     def items(self) -> dict[str, dict]:
         return {

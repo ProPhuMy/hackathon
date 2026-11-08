@@ -385,3 +385,64 @@ def test_dataclass_equality_and_init():
     assert t1 == t2
     assert t1 != t3
 
+
+def test_trip_crop_is_largest_held(line):
+    session = DoorSession(line)
+    frame = np.ones((300, 300, 3), dtype=np.uint8)
+
+    # Frame 0: Hand outside holding item (small box: 10x10)
+    h0 = hand(1, 100.0, 50.0)
+    b0 = Track(10, "item", Box(95.0, 45.0, 105.0, 55.0), 0.85, "bottle")
+    session.update([h0, b0], ts="t0", frame=frame)
+
+    # Frame 1: Hand outside holding item (large box: 40x40) -> grows
+    h1 = hand(1, 100.0, 50.0)
+    b1 = Track(10, "item", Box(80.0, 30.0, 120.0, 70.0), 0.85, "bottle")
+    session.update([h1, b1], ts="t1", frame=frame)
+
+    # Frame 2: Hand crosses in holding item (medium box: 20x20) -> shrinks at crossing
+    h2 = hand(1, 100.0, 150.0)
+    b2 = Track(10, "item", Box(90.0, 140.0, 110.0, 160.0), 0.85, "bottle")
+    session.update([h2, b2], ts="t2", frame=frame)
+
+    # Frame 3: Hand crosses out empty
+    h3 = hand(1, 100.0, 50.0)
+    trips = session.update([h3], ts="t3", frame=frame)
+
+    assert len(trips) == 1
+    assert trips[0].type == "PUT"
+    assert trips[0].crop is not None
+    # Crop shape must equal the largest held box (40x40), not the 20x20 crossing box
+    assert trips[0].crop.shape == (40, 40, 3)
+    # Ensure it is a copy, not a view of the frame
+    frame[:] = 0
+    assert np.all(trips[0].crop == 1)
+
+
+def test_hand_crop_resets_when_item_changes(line):
+    session = DoorSession(line)
+    frame = np.ones((300, 300, 3), dtype=np.uint8)
+
+    # Hand 1 holds item 10 (large box: 50x50)
+    h0 = hand(1, 100.0, 50.0)
+    b0 = Track(10, "item", Box(75.0, 25.0, 125.0, 75.0), 0.85, "bottle")
+    session.update([h0, b0], ts="t0", frame=frame)
+
+    # Hand 1 switches to item 20 (medium box: 25x25)
+    b1 = Track(20, "item", Box(87.5, 37.5, 112.5, 62.5), 0.85, "can")
+    session.update([h0, b1], ts="t1", frame=frame)
+
+    # Hand 1 crosses in holding item 20 (small box: 15x15)
+    h_in = hand(1, 100.0, 150.0)
+    b2 = Track(20, "item", Box(92.5, 142.5, 107.5, 157.5), 0.85, "can")
+    session.update([h_in, b2], ts="t2", frame=frame)
+
+    # Hand 1 crosses out empty
+    trips = session.update([hand(1, 100.0, 50.0)], ts="t3", frame=frame)
+    assert len(trips) == 1
+    assert trips[0].item.id == 20
+    # Must be 25x25 (largest for item 20), not 50x50 (from item 10)
+    assert trips[0].crop.shape == (25, 25, 3)
+
+
+

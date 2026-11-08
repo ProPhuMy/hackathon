@@ -8,6 +8,9 @@ dependencies = [
     "numpy>=2.4.6",
     "opencv-python>=5.0.0.93",
     "requests>=2.34.2",
+    "scipy>=1.17.1",
+    "torch>=2.8,<2.11",
+    "transformers>=5.22.2",
     "ultralytics>=8.4.207",
 ]
 
@@ -23,3 +26,13 @@ dev = [
     "jsonschema>=4.26.0",
     "pytest>=9.2.0",
 ]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu128", marker = "sys_platform == 'linux'" }]
+torchvision = [{ index = "pytorch-cu128", marker = "sys_platform == 'linux'" }]
+

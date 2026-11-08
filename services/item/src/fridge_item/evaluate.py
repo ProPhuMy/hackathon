@@ -51,6 +51,7 @@ def evaluate_command(
     clips_dir: str = "data/clips",
     config_path: str = "config.json",
     detector_factory: Callable[[list[str], str], Any] | None = None,
+    embed: bool = False,
 ) -> dict[str, int]:
     """Run ItemPipeline over labeled clips with a fresh temporary gallery and detector per clip."""
     from fridge_item.config import load
@@ -69,6 +70,12 @@ def evaluate_command(
 
         detector_factory = Detector
 
+    embedder = None
+    if embed:
+        from fridge_item.embed import Embedder
+
+        embedder = Embedder()
+
     total_correct = 0
     total_missed = 0
     total_extra = 0
@@ -82,7 +89,9 @@ def evaluate_command(
         got_events: list[tuple[str, str]] = []
         with tempfile.TemporaryDirectory() as tmp_dir:
             gallery = ItemGallery(str(Path(tmp_dir) / "gallery.json"))
-            pipeline = ItemPipeline(cfg=cfg, detect=detector, gallery=gallery)
+            pipeline = ItemPipeline(
+                cfg=cfg, detect=detector, gallery=gallery, embed=embedder
+            )
 
             for frame, ts in iter_frames(str(clip_path)):
                 events = pipeline.process(frame, ts)

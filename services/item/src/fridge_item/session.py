@@ -57,6 +57,7 @@ class DoorSession:
         self.hand_sides: dict[int, int] = {}
         self.pending_in: list[Crossing] = []
         self.pending_out: list[Crossing] = []
+        self.hand_crops: dict[int, tuple[int, float, np.ndarray | None]] = {}
 
     def update(
         self, tracks: list[Track], ts: str, frame: np.ndarray | None = None
@@ -64,6 +65,33 @@ class DoorSession:
         hands = [t for t in tracks if t.kind == "hand"]
         items = [t for t in tracks if t.kind == "item"]
         trips: list[Trip] = []
+
+        # Update best crop per hand ID for the item currently held
+        for hand in hands:
+            held = held_item(hand, items)
+            if held is None:
+                self.hand_crops.pop(hand.id, None)
+            else:
+                crop: np.ndarray | None = None
+                area = 0.0
+                if frame is not None:
+                    h, w = frame.shape[:2]
+                    x1 = max(0, min(w, int(held.box.x1)))
+                    y1 = max(0, min(h, int(held.box.y1)))
+                    x2 = max(0, min(w, int(held.box.x2)))
+                    y2 = max(0, min(h, int(held.box.y2)))
+                    if x2 > x1 and y2 > y1:
+                        c = frame[y1:y2, x1:x2]
+                        if c.size > 0:
+                            crop = c.copy()
+                            area = float(c.shape[0] * c.shape[1])
+
+                if hand.id not in self.hand_crops or self.hand_crops[hand.id][0] != held.id:
+                    self.hand_crops[hand.id] = (held.id, area, crop)
+                else:
+                    prev_id, prev_area, prev_crop = self.hand_crops[hand.id]
+                    if crop is not None and area > prev_area:
+                        self.hand_crops[hand.id] = (held.id, area, crop)
 
         for hand in hands:
             side = self.line.side(hand.box.center())
@@ -89,16 +117,9 @@ class DoorSession:
 
             held = held_item(hand, items)
             crop: np.ndarray | None = None
-            if frame is not None and held is not None:
-                h, w = frame.shape[:2]
-                x1 = max(0, min(w, int(held.box.x1)))
-                y1 = max(0, min(h, int(held.box.y1)))
-                x2 = max(0, min(w, int(held.box.x2)))
-                y2 = max(0, min(h, int(held.box.y2)))
-                if x2 > x1 and y2 > y1:
-                    c = frame[y1:y2, x1:x2]
-                    if c.size > 0:
-                        crop = c
+            if held is not None and hand.id in self.hand_crops and self.hand_crops[hand.id][0] == held.id:
+                best = self.hand_crops[hand.id][2]
+                crop = best.copy() if best is not None else None
 
             crossing = Crossing(
                 direction=direction,
@@ -171,4 +192,5 @@ class DoorSession:
         self.pending_in.clear()
         self.pending_out.clear()
         self.hand_sides.clear()
+        self.hand_crops.clear()
         return trips
