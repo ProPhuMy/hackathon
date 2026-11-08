@@ -400,3 +400,74 @@ def test_cli_run_latency_print(tmp_path: Path, monkeypatch, capsys):
     assert "Frame 100: detector p50=" in out
     assert "process p50=" in out
 
+
+def test_close_flushes_open_session(tmp_path: Path):
+    line = DoorLine(p1=(0.0, 100.0), p2=(200.0, 100.0), inside=(100.0, 200.0))
+    cfg = Config(roi=(0, 0, 50, 50), line=line, door_on=100.0, door_off=50.0)
+    gallery = ItemGallery(tmp_path / "gallery.json")
+    script = [
+        [hand(1, 100.0, 50.0), item(10, 100.0, 50.0, label="yogurt", conf=0.88)],
+        [hand(1, 100.0, 150.0), item(10, 100.0, 150.0, label="yogurt", conf=0.88)],
+    ]
+    detector = ScriptedDetector(script)
+    pipeline = ItemPipeline(cfg=cfg, detect=detector, gallery=gallery)
+
+    bright_frame = np.full((300, 300, 3), 200, dtype=np.uint8)
+    pipeline.process(bright_frame, ts="2026-11-07T20:00:01.000Z")
+    pipeline.process(bright_frame, ts="2026-11-07T20:00:02.000Z")
+
+    # Stream ends while door is still open
+    flushed = pipeline.close()
+    assert len(flushed) == 1
+    ev = flushed[0]
+    assert ev["type"] == "PUT"
+    assert ev["item_label"] == "yogurt"
+    Draft202012Validator(SCHEMA).validate(ev)
+    assert pipeline.session is None
+
+
+def test_close_with_no_open_session(tmp_path: Path):
+    line = DoorLine(p1=(0.0, 100.0), p2=(200.0, 100.0), inside=(100.0, 200.0))
+    cfg = Config(roi=(0, 0, 50, 50), line=line, door_on=100.0, door_off=50.0)
+    gallery = ItemGallery(tmp_path / "gallery.json")
+    pipeline = ItemPipeline(cfg=cfg, detect=ScriptedDetector([]), gallery=gallery)
+
+    assert pipeline.close() == []
+
+
+def test_cli_run_command_flushes_on_shutdown(tmp_path: Path, monkeypatch, capsys):
+    from fridge_item.__main__ import run_command
+    from fridge_item.config import Config, save
+
+    cfg_file = tmp_path / "cfg.json"
+    line = DoorLine(p1=(0.0, 100.0), p2=(200.0, 100.0), inside=(100.0, 200.0))
+    save(Config(roi=(0, 0, 50, 50), line=line, door_on=100.0, door_off=50.0), cfg_file)
+
+    script = [
+        [hand(1, 100.0, 50.0), item(10, 100.0, 50.0, label="juice", conf=0.85)],
+        [hand(1, 100.0, 150.0), item(10, 100.0, 150.0, label="juice", conf=0.85)],
+    ]
+    detector = ScriptedDetector(script)
+    monkeypatch.setattr("fridge_item.detect.Detector", lambda *args, **kwargs: detector)
+
+    bright_frame = np.full((300, 300, 3), 200, dtype=np.uint8)
+    frames = [
+        (bright_frame, "2026-11-07T20:00:01.000Z"),
+        (bright_frame, "2026-11-07T20:00:02.000Z"),
+    ]
+    monkeypatch.setattr("fridge_item.__main__.iter_frames", lambda src: iter(frames))
+
+    run_command(
+        source="dummy_src",
+        config_path=str(cfg_file),
+        gallery_path=str(tmp_path / "gallery.json"),
+        dry_run=True,
+    )
+
+    out = capsys.readouterr().out.strip()
+    ev = json.loads(out)
+    assert ev["type"] == "PUT"
+    assert ev["item_label"] == "juice"
+    Draft202012Validator(SCHEMA).validate(ev)
+
+

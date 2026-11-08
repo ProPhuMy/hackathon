@@ -34,19 +34,23 @@ class ItemPipeline:
 
         if not is_open:
             self.tracks = []
-            if self.session is not None:
-                trips = self.session.close()
-                self.session = None
-            else:
-                trips = []
+            return self.close()
         else:
             if self.session is None:
                 self.session = DoorSession(self.cfg.line)
             tracks = self.detect(frame)
             self.tracks = tracks
             trips = self.session.update(tracks, ts, frame)
+            return self._trips_to_events(trips)
 
-        return self._trips_to_events(trips)
+    def close(self) -> list[dict]:
+        """Flush and close any open door session, returning the resulting events."""
+        if self.session is not None:
+            trips = self.session.close()
+            self.session = None
+            return self._trips_to_events(trips)
+        return []
+
 
     def _trips_to_events(self, trips: list[Trip]) -> list[dict]:
         events: list[dict] = []
