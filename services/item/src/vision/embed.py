@@ -3,6 +3,8 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
+from . import pick_device
+
 
 def color_histogram(crop: np.ndarray) -> np.ndarray:
     """HSV histogram with bins [8, 8, 4] and ranges [0,180,0,256,0,256], flattened, L2-normalized, multiplied by 0.5."""
@@ -24,14 +26,7 @@ class Embedder:
         import torch
         from transformers import AutoImageProcessor, AutoModel
 
-        if device is None:
-            if torch.cuda.is_available():
-                device = "cuda"
-            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-                device = "mps"
-            else:
-                device = "cpu"
-        self.device = device
+        self.device = device if device is not None else pick_device(torch)
         self._torch = torch
         self.processor = AutoImageProcessor.from_pretrained("facebook/dinov2-small")
         self.model = AutoModel.from_pretrained("facebook/dinov2-small").to(self.device)

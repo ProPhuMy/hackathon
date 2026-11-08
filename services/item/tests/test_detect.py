@@ -4,13 +4,8 @@ import numpy as np
 import pytest
 
 from src.core.geometry import Box, DoorLine, Track
-from src.vision.detect import (
-    Detector,
-    GDinoDetector,
-    phrase_to_class,
-    to_tracks,
-    tracker_output_to_tracks,
-)
+from src.vision.detect import Detector, to_tracks
+from src.vision.gdino import GDinoDetector, phrase_to_class, tracker_output_to_tracks
 from src.draw import overlay
 from src.__main__ import evaluate_command, parse_args, probe_command
 
@@ -321,7 +316,7 @@ def test_probe_command_selects_gdino(tmp_path: Path):
     mock_writer = MagicMock()
 
     with patch("src.config.load", return_value=cfg), \
-         patch("src.vision.detect.GDinoDetector", return_value=mock_gdino) as mock_gdino_cls, \
+         patch("src.vision.gdino.GDinoDetector", return_value=mock_gdino) as mock_gdino_cls, \
          patch("src.__main__.iter_frames", return_value=iter(frames)), \
          patch("cv2.VideoWriter", return_value=mock_writer):
         probe_command("clip.mp4", str(tmp_path / "out.mp4"), detector="gdino")
@@ -356,7 +351,7 @@ def test_evaluate_command_selects_gdino(tmp_path: Path, monkeypatch):
     mock_gdino.return_value = []
     mock_factory = MagicMock(return_value=mock_gdino)
 
-    with patch("src.vision.detect.GDinoDetector", mock_factory):
+    with patch("src.vision.gdino.GDinoDetector", mock_factory):
         evaluate_command(
             labels_path=str(labels_file),
             clips_dir=str(clips_dir),
@@ -387,7 +382,7 @@ def test_run_command_selects_gdino(tmp_path: Path, monkeypatch):
     mock_gdino = MagicMock()
     mock_gdino_cls = MagicMock(return_value=mock_gdino)
 
-    with patch("src.vision.detect.GDinoDetector", mock_gdino_cls):
+    with patch("src.vision.gdino.GDinoDetector", mock_gdino_cls):
         run_command(
             source="dummy.mp4",
             config_path=str(cfg_file),

@@ -47,7 +47,7 @@ def probe_command(
 
     cfg = load(config_path)
     if detector == "gdino":
-        from .vision.detect import GDinoDetector
+        from .vision.gdino import GDinoDetector
 
         detector_model = GDinoDetector(prompts=cfg.prompts, hand_label=cfg.hand_label)
     else:
@@ -101,7 +101,7 @@ def run_command(
     cfg = load(config_path)
     gallery = ItemGallery(gallery_path)
     if detector == "gdino":
-        from .vision.detect import GDinoDetector
+        from .vision.gdino import GDinoDetector
 
         detector_model = GDinoDetector(prompts=cfg.prompts, hand_label=cfg.hand_label)
     else:
@@ -260,7 +260,7 @@ def evaluate_command(
 
     if detector_factory is None:
         if detector == "gdino":
-            from .vision.detect import GDinoDetector
+            from .vision.gdino import GDinoDetector
 
             detector_factory = GDinoDetector
         else:

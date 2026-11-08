@@ -70,7 +70,7 @@ def evaluate_command(
     cfg = load(config_path)
     if detector_factory is None:
         if detector == "gdino":
-            from .vision.detect import GDinoDetector
+            from .vision.gdino import GDinoDetector
 
             detector_factory = GDinoDetector
         else:
