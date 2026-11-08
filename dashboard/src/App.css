@@ -574,3 +574,18 @@ dd { margin-left: 20px; color: var(--star); }
   .interact-link { margin-top: 8px; height: 44px; }
   footer { min-height: 64px; }
 }
+
+/* Inventory editing (demo session only) */
+.inventory-row { display: flex; align-items: stretch; gap: 6px; min-width: 0; }
+.inventory-row .inventory-item { flex: 1; }
+.remove-item { flex: 0 0 44px; min-height: 44px; font-size: 20px; line-height: 1; color: var(--muted); background: rgba(238, 241, 255, 0.04); border: 1px solid rgba(141, 149, 189, 0.2); }
+.remove-item:hover { color: var(--ember); border-color: var(--ember); }
+.placeholder-thumb { object-fit: contain; }
+.item-form { flex-wrap: wrap; align-items: flex-end; }
+.item-form select { min-width: 120px; }
+.placeholder-preview { width: 44px; height: 44px; flex-shrink: 0; }
+.placeholder-detail { width: 96px; height: 96px; display: block; }
+.text-button { background: none; color: var(--muted); font-size: 12px; text-decoration: underline; text-underline-offset: 4px; min-height: 44px; padding: 0 8px; }
+.text-button:hover { color: var(--star); }
+.text-button.danger:hover { color: var(--ember); }
+.detail-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }

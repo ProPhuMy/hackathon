@@ -1,7 +1,7 @@
 import { Component, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { Environment, Html, Lightformer, useGLTF } from '@react-three/drei';
-import { Color, Euler, MathUtils, Matrix4, Vector3 } from 'three';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Billboard, Environment, Html, Lightformer, useGLTF, useTexture } from '@react-three/drei';
+import { Euler, MathUtils, Matrix4, Plane, Raycaster, SRGBColorSpace, Vector2, Vector3 } from 'three';
 import fridgeGlbUrl from './assets/mini-fridge.glb?url';
 import {
   advanceJourney,
@@ -39,7 +39,12 @@ const _euler = new Euler();
 const _mat4 = new Matrix4();
 const _camPos = new Vector3();
 const _camTarget = new Vector3();
-const _glowColor = new Color('#3fd6ff');
+const _hit = new Vector3();
+const _camDir = new Vector3();
+const _ndc = new Vector2();
+const _dragRay = new Raycaster();
+const DRAG_THRESHOLD_PX = 6;
+const MAX_DRAG = 6;
 
 // Deterministic simple hash for item ids
 function hashId(id) {
@@ -48,6 +53,22 @@ function hashId(id) {
     h = (h * 31 + id.charCodeAt(i)) >>> 0;
   }
   return h;
+}
+
+const PLACEHOLDER_IMAGE = '/images/placeholder-item.svg';
+const srgb = (texture) => { texture.colorSpace = SRGBColorSpace; };
+
+// Items without a modelled food (e.g. added in Inventory) float as a camera-facing placeholder card.
+function PlaceholderCard({ highlighted }) {
+  const map = useTexture(PLACEHOLDER_IMAGE, srgb);
+  return (
+    <Billboard>
+      <mesh>
+        <planeGeometry args={[0.36, 0.36]} />
+        <meshBasicMaterial map={map} transparent toneMapped={false} color={highlighted ? '#ffffff' : '#c9cee6'} />
+      </mesh>
+    </Billboard>
+  );
 }
 
 // Dev-only screenshot hook (?progress=<0..1>)
@@ -100,6 +121,50 @@ function FridgeWorld({
 
   // Item groups refs (one world-space group per item)
   const itemGroupRefs = useRef(new Map());
+  // Drag: per-item world offsets on top of the floating pose, plus the active gesture.
+  const dragOffsets = useRef(new Map());
+  const basePositions = useRef(new Map());
+  const drag = useRef({ id: null, plane: new Plane(), grab: new Vector3(), x: 0, y: 0, moved: false });
+  const getThree = useThree((state) => state.get);
+
+  // Press an item to drag it on a camera-facing plane; a press without movement is a click.
+  // Window listeners keep the drag alive even when the cursor leaves the item.
+  function startDrag(e, id) {
+    if (!pickRef.current) return;
+    e.stopPropagation();
+    const grp = itemGroupRefs.current.get(id);
+    const d = drag.current;
+    e.camera.getWorldDirection(_camDir);
+    d.plane.setFromNormalAndCoplanarPoint(_camDir, grp.position);
+    if (!e.ray.intersectPlane(d.plane, _hit)) return;
+    d.grab.copy(_hit).sub(grp.position);
+    Object.assign(d, { id, x: e.clientX, y: e.clientY, moved: false });
+    const canvas = getThree().gl.domElement;
+    const move = (ev) => {
+      if (!d.moved && Math.hypot(ev.clientX - d.x, ev.clientY - d.y) < DRAG_THRESHOLD_PX) return;
+      d.moved = true;
+      canvas.style.cursor = 'grabbing';
+      const base = basePositions.current.get(id);
+      const rect = canvas.getBoundingClientRect();
+      _ndc.set(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1);
+      _dragRay.setFromCamera(_ndc, getThree().camera);
+      if (!base || !_dragRay.ray.intersectPlane(d.plane, _hit)) return;
+      const offset = dragOffsets.current.get(id) ?? new Vector3();
+      offset.copy(_hit).sub(d.grab).sub(base).clampLength(0, MAX_DRAG);
+      dragOffsets.current.set(id, offset);
+    };
+    const end = (ev) => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+      canvas.style.cursor = '';
+      d.id = null;
+      if (ev.type === 'pointerup' && !d.moved && pickRef.current) onInspect(id);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+  }
 
   // Listen for prefers-reduced-motion
   useEffect(() => {
@@ -288,6 +353,7 @@ function FridgeWorld({
 
       if (sample.burst === 0) {
         grp.visible = false;
+        dragOffsets.current.delete(item.id); // back in the fridge: next trip starts fresh
         return;
       }
       grp.visible = true;
@@ -340,6 +406,12 @@ function FridgeWorld({
         grp.rotation.z += Math.cos(r.time * 0.35 + index) * 0.15 * driftSmooth;
       }
 
+      // Dragged items keep their offset while floating; it fades out as they fly home.
+      const base = basePositions.current.get(item.id);
+      if (base) base.copy(_vPos);
+      else basePositions.current.set(item.id, _vPos.clone());
+      const offset = dragOffsets.current.get(item.id);
+      if (offset) _vPos.addScaledVector(offset, driftSmooth);
       grp.position.copy(_vPos);
 
       // Hover / Selection scale animation (1.08 on hover)
@@ -401,12 +473,7 @@ function FridgeWorld({
               else itemGroupRefs.current.delete(item.id);
             }}
             visible={false}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (pickRef.current) {
-                onInspect(item.id);
-              }
-            }}
+            onPointerDown={(e) => startDrag(e, item.id)}
             onPointerOver={(e) => {
               e.stopPropagation();
               if (pickRef.current) {
@@ -417,20 +484,7 @@ function FridgeWorld({
               onHoverChange(null);
             }}
           >
-            {mesh ? (
-              <primitive object={mesh} />
-            ) : (
-              <mesh>
-                <capsuleGeometry args={[0.08, 0.14, 8, 16]} />
-                <meshStandardMaterial
-                  color={item.color || '#3fd6ff'}
-                  emissive={isHovered || isSelected ? _glowColor : '#000000'}
-                  emissiveIntensity={isHovered || isSelected ? 0.35 : 0}
-                  roughness={0.25}
-                  metalness={0.15}
-                />
-              </mesh>
-            )}
+            {mesh ? <primitive object={mesh} /> : <PlaceholderCard highlighted={isHovered || isSelected} />}
 
             {/* Floating name tag when hovered or selected */}
             {(isHovered || isSelected) && canPick && (
