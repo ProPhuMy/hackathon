@@ -103,3 +103,12 @@ Run `node tools/checks/mapping.mjs` for the mapping checks. The GLB retains its
 legacy `itemIndex` metadata; live server IDs and dynamic model placement still
 require the backend contract. See [the team review](docs/team-dispatch.md) for
 accepted changes, browser evidence, and remaining dependencies.
+
+## Live backend
+
+To connect the dashboard to the real backend service:
+1. Start the backend service listening on port 8000.
+2. Run `npm run dev`. The Vite development server automatically proxies `/api` calls and the Server-Sent Events stream to `http://localhost:8000`.
+3. In production builds, configure the backend base URL using the `VITE_API_BASE` environment variable if not serving from `/api`.
+4. If the backend is unreachable, the dashboard automatically falls back to illustrative demo data and continues retrying in the background.
+

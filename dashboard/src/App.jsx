@@ -1,6 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
 import './App.css'
+import { API_BASE, useFridgeData } from './liveData.js'
+
 const Fridge3D = lazy(() => import('./Fridge3D.jsx'))
 
 const DEMO_INVENTORY = [
@@ -13,12 +15,12 @@ const DEMO_INVENTORY = [
 ]
 const PLACEHOLDER_IMAGE = '/images/placeholder-item.svg'
 const clockTime = () => new Date().toTimeString().slice(0, 5)
-const events = [
-  { time: '09:34', action: 'TAKE', item: 'Milk carton', person: 'Dang', owner: 'Viet', result: 'Mismatch', confidence: '90%' },
-  { time: '09:31', action: 'PUT', item: 'Pasta salad', person: 'Phong', owner: 'Phong', result: 'Verified', confidence: '96%' },
-  { time: '09:28', action: 'TAKE', item: 'Sandwich', person: 'Unknown', owner: 'Khang', result: 'Uncertain', confidence: '42%' },
-  { time: '09:24', action: 'PUT', item: 'Cold brew', person: 'Dang', owner: 'Dang', result: 'Verified', confidence: '94%' },
-  { time: '09:21', action: 'PUT', item: 'Lunch box', person: 'Khang', owner: 'Khang', result: 'Verified', confidence: '98%' },
+const DEMO_EVENTS = [
+  { id: '0934', time: '09:34', action: 'TAKE', item: 'Milk carton', person: 'Dang', owner: 'Viet', result: 'Mismatch', confidence: '90%' },
+  { id: '0931', time: '09:31', action: 'PUT', item: 'Pasta salad', person: 'Phong', owner: 'Phong', result: 'Verified', confidence: '96%' },
+  { id: '0928', time: '09:28', action: 'TAKE', item: 'Sandwich', person: 'Unknown', owner: 'Khang', result: 'Uncertain', confidence: '42%' },
+  { id: '0924', time: '09:24', action: 'PUT', item: 'Cold brew', person: 'Dang', owner: 'Dang', result: 'Verified', confidence: '94%' },
+  { id: '0921', time: '09:21', action: 'PUT', item: 'Lunch box', person: 'Khang', owner: 'Khang', result: 'Verified', confidence: '98%' },
 ]
 
 function Modal({ title, onClose, children }) {
@@ -43,8 +45,14 @@ function Modal({ title, onClose, children }) {
 }
 
 function App() {
+  const { mode, stale, inventory: liveInventory, events: liveEvents, people: livePeople, refetch } = useFridgeData()
+  const isLive = mode === 'live'
+
   // Demo inventory is editable for this page session; it is not saved anywhere.
-  const [inventory, setInventory] = useState(DEMO_INVENTORY)
+  const [demoInventory, setDemoInventory] = useState(DEMO_INVENTORY)
+  const inventory = isLive ? liveInventory : demoInventory
+  const events = isLive ? liveEvents : DEMO_EVENTS
+
   const [travel, setTravel] = useState(false)
   const [phase, setPhase] = useState('idle')
   const [modelReady, setModelReady] = useState(false)
@@ -60,30 +68,33 @@ function App() {
   const pathname = useRouterState({ select: state => state.location.pathname })
   const sectionNames = { '/inventory': 'Inventory', '/history': 'History', '/alerts': 'Alerts', '/people': 'People' }
   const panel = sectionNames[pathname] || (pathname.startsWith('/items/') ? 'Item details' : pathname.startsWith('/events/') ? 'Event details' : null)
-  const selected = panel === 'Item details' ? inventory.find(i => i.id === pathname.split('/')[2]) : panel === 'Event details' ? events.find(e => e.time.replace(':', '') === pathname.split('/')[2]) : null
+  const selected = panel === 'Item details' ? inventory.find(i => i.id === pathname.split('/')[2]) : panel === 'Event details' ? events.find(e => e.id === pathname.split('/')[2]) : null
   const selectedId = pathname.startsWith('/items/') ? pathname.split('/')[2] : null
   function setPanel(value) { return go({ to: value ? '/' + value.toLowerCase() : '/' }) }
   const [query, setQuery] = useState('')
   const [owner, setOwner] = useState('Everyone')
-  const [people, setPeople] = useState(['Khang', 'Viet', 'Dang', 'Phong'])
+  const [demoPeople, setDemoPeople] = useState(['Khang', 'Viet', 'Dang', 'Phong'])
+  const peopleNames = isLive ? livePeople.map(p => p.name) : demoPeople
+
   const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState('')
+  const [newPersonId, setNewPersonId] = useState('')
   const [notice, setNotice] = useState('')
   const [itemForm, setItemForm] = useState(null) // { name, owner } while the add-item form is open
   const [itemNotice, setItemNotice] = useState('')
   const visibleItems = inventory.filter(i => (owner === 'Everyone' || owner === i.owner) && `${i.name} ${i.owner}`.toLowerCase().includes(query.toLowerCase()))
-  function navigate(value) { setPanel(value); setQuery(''); setOwner('Everyone'); setAdding(false); setItemForm(null) }
+  function navigate(value) { setPanel(value); setQuery(''); setOwner('Everyone'); setAdding(false); setNewName(''); setNewPersonId(''); setItemForm(null) }
   function addItem(event) {
     event.preventDefault()
     const name = itemForm.name.trim()
     if (!name) return
     const item = { id: `n${Date.now().toString(36)}`, name, owner: itemForm.owner, kind: 'placeholder', color: '#8d95bd', time: clockTime(), placeholder: true }
-    setInventory(list => [...list, item])
+    setDemoInventory(list => [...list, item])
     setItemForm(null)
     setItemNotice(`${name} added to the fridge.`)
   }
   function removeItem(item) {
-    setInventory(list => list.filter(i => i.id !== item.id))
+    setDemoInventory(list => list.filter(i => i.id !== item.id))
     setItemNotice(`${item.name} removed from the fridge.`)
     if (selectedId === item.id) navigate('Inventory')
   }
@@ -91,6 +102,14 @@ function App() {
   function inspect(item) {
     go({ to: '/items/$itemId', params: { itemId: item.id } })
   }
+
+  const alertCount = events.filter(e => e.result !== 'Verified').length
+  const latestAlert = events.find(e => e.result !== 'Verified')
+  const latestSignal = latestAlert
+    ? (latestAlert.result === 'Mismatch'
+        ? `Someone took ${latestAlert.owner}’s ${latestAlert.item.toLowerCase()}.`
+        : `${latestAlert.item}: identity unclear.`)
+    : 'All quiet.'
 
   useEffect(() => {
     if (travel) {
@@ -137,9 +156,9 @@ function App() {
     </section>
     <header className="site-header outside-ui" inert={immersive}>
       <a href="#" className="wordmark" onClick={e => { e.preventDefault(); closePanel(); setTravel(false) }} aria-label="Fridge home">fridge<span>—</span></a>
-      <nav aria-label="Main navigation">{['Inventory', 'History', 'Alerts', 'People'].map((name, i) => <Link key={name} to={'/' + name.toLowerCase()} aria-haspopup="dialog"><span className="nav-index">0{i + 1}</span>{name}{name === 'Alerts' && <span className="alert-count">2</span>}</Link>)}</nav>
+      <nav aria-label="Main navigation">{['Inventory', 'History', 'Alerts', 'People'].map((name, i) => <Link key={name} to={'/' + name.toLowerCase()} aria-haspopup="dialog"><span className="nav-index">0{i + 1}</span>{name}{name === 'Alerts' && alertCount > 0 && <span className="alert-count">{alertCount}</span>}</Link>)}</nav>
     </header>
-    <div className="system-status outside-ui" inert={immersive}><span className="status-dot"/> LOCAL DEMO<span className="status-caption">ONE FRIDGE. FOUR ROOMMATES.</span></div>
+    <div className="system-status outside-ui" inert={immersive}><span className="status-dot"/> {isLive ? (stale ? 'LIVE · RECONNECTING' : 'LIVE') : 'LOCAL DEMO'}<span className="status-caption">ONE FRIDGE. FOUR ROOMMATES.</span></div>
     <main className="room">
       <section className="intro outside-ui" aria-label="Welcome" inert={immersive}>
         <span className="eyebrow">A SHARED FRIDGE, IN ORBIT.</span>
@@ -172,7 +191,7 @@ function App() {
         <span aria-hidden="true">↖</span> RETURN HOME <kbd>ESC</kbd>
       </button>
       <div className="interior-heading">
-        <span className="status-dot"/> FRIDGE / 001 · CONTENTS ADRIFT <span>ILLUSTRATIVE INVENTORY</span>
+        <span className="status-dot"/> FRIDGE / 001 · CONTENTS ADRIFT <span>{isLive ? 'LIVE INVENTORY' : 'ILLUSTRATIVE INVENTORY'}</span>
       </div>
       <div className="journey-status" role="status">
         {phase === 'pulling' ? 'SOMETHING IS PULLING.' :
@@ -199,16 +218,61 @@ function App() {
         </div>
       </div>
     </div>
-    <footer className="outside-ui" inert={immersive}><span>BUILT FOR SHARING.<br/><strong>NOT STEALING.</strong></span><button onClick={() => navigate('Alerts')} className="latest-event"><span className="event-dot"/> <span>LATEST SIGNAL <strong>Someone took Viet’s milk.</strong></span><span aria-hidden="true">↗</span></button><span className="footer-meta">FRIDGE TRACKER © 2026<br/>ILLUSTRATIVE DEMO DATA</span></footer>
+    <footer className="outside-ui" inert={immersive}><span>BUILT FOR SHARING.<br/><strong>NOT STEALING.</strong></span><button onClick={() => navigate('Alerts')} className="latest-event"><span className="event-dot"/> <span>LATEST SIGNAL <strong>{latestSignal}</strong></span><span aria-hidden="true">↗</span></button><span className="footer-meta">FRIDGE TRACKER © 2026<br/>{isLive ? 'LIVE FRIDGE DATA' : 'ILLUSTRATIVE DEMO DATA'}</span></footer>
     <Outlet />
     {panel && <Modal title={panel} onClose={closePanel}>
-      {panel === 'Inventory' && <><p className="panel-copy">What’s inside, and who it belongs to.</p><div className="filters"><label className="search-label">Search<input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Find an item or owner…"/></label><label>Owner<select value={owner} onChange={e => setOwner(e.target.value)}>{['Everyone', ...people].map(p => <option key={p}>{p}</option>)}</select></label></div><div className="inventory-list">{visibleItems.map(item => <div key={item.id} className="inventory-row"><button className="inventory-item" onClick={() => inspect(item)}>{item.placeholder ? <img className="food-mini placeholder-thumb" src={PLACEHOLDER_IMAGE} alt=""/> : <span className={`food-mini ${item.kind}`} style={{background: item.color}}/>}<span><strong>{item.name}</strong><small>Owner · {item.owner}</small></span><span className="item-code">{item.placeholder ? 'NEW' : `0${item.id}`} ↗</span></button><button className="remove-item" onClick={() => removeItem(item)} aria-label={`Remove ${item.name}`} title="Remove">×</button></div>)}</div>{visibleItems.length === 0 && <p className="empty-state">No items match. Try another name or owner.</p>}{itemForm ? <form className="person-form item-form" onSubmit={addItem}><img className="placeholder-preview" src={PLACEHOLDER_IMAGE} alt="Placeholder image for the new item"/><label>Item name<input value={itemForm.name} onChange={e => setItemForm({ ...itemForm, name: e.target.value })} maxLength={40} required autoComplete="off" autoFocus/></label><label>Belongs to<select value={itemForm.owner} onChange={e => setItemForm({ ...itemForm, owner: e.target.value })}>{people.map(p => <option key={p}>{p}</option>)}</select></label><button className="primary-button" type="submit">Add</button><button className="text-button" type="button" onClick={() => setItemForm(null)}>Cancel</button></form> : <button className="primary-button" onClick={() => setItemForm({ name: '', owner: people[0] })}>+ Add item</button>}<p className="demo-note" role="status">{itemNotice ? `${itemNotice} ` : ''}{visibleItems.length} of {inventory.length} items · Demo inventory, changes last for this session</p></>}
-      {panel === 'History' && <><p className="panel-copy">Every put. Every take. Nothing swept under the rug.</p><label className="search-label">Search events<input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search by person, item or action…"/></label><div className="table-scroll"><table><thead><tr>{['Time', 'Action', 'Item', 'Person', 'Result'].map(h => <th key={h}>{h}</th>)}</tr></thead><tbody>{events.filter(e => Object.values(e).join(' ').toLowerCase().includes(query.toLowerCase())).map(e => <tr key={e.time}><td>{e.time}</td><td><span className="action-tag">{e.action}</span></td><td>{e.item}</td><td>{e.person}</td><td><span className={`result ${e.result.toLowerCase()}`}>{e.result}</span></td></tr>)}</tbody></table></div></>}
-      {panel === 'Alerts' && <><p className="panel-copy">A signal, not a verdict. Here’s what needs a closer look.</p>{events.filter(e => e.result !== 'Verified').map(e => <article className={`alert-card ${e.result.toLowerCase()}`} key={e.time}><span className="eyebrow">{e.result === 'Mismatch' ? '01 / OWNERSHIP MISMATCH' : '02 / UNCERTAIN IDENTITY'}</span><h3>{e.result === 'Mismatch' ? 'Who took Viet’s milk?' : 'A sandwich left. Identity unclear.'}</h3><p>{e.time} · Owner: {e.owner} · {e.result === 'Mismatch' ? `Taker: ${e.person}` : 'Person not reliably recognized'}</p><button onClick={() => { go({ to: '/events/$eventId', params: { eventId: e.time.replace(':', '') } }) }}>Inspect event ↗</button></article>)}</>}
-      {panel === 'People' && <><p className="panel-copy">Familiar faces in a shared space.</p><div className="people-list">{people.map((p, i) => <div className="person" key={p}><span className="avatar">{p[0]}</span><strong>{p}</strong><span className="person-state">{i < 4 ? 'DEMO PROFILE' : 'AWAITING ENROLLMENT'}</span></div>)}</div><button className="primary-button" onClick={() => setAdding(!adding)} aria-expanded={adding}>+ Add demo person</button>{adding && <form className="person-form" onSubmit={e => { e.preventDefault(); const n = newName.trim(); if (!n) return; if (people.some(p => p.toLowerCase() === n.toLowerCase())) { setNotice('That name already exists.'); return } setPeople([...people, n]); setNewName(''); setAdding(false); setNotice(`${n} added to this demo. Face enrollment needs the backend.`) }}><label>Display name<input value={newName} onChange={e => setNewName(e.target.value)} maxLength={40} required autoComplete="off"/></label><button className="primary-button" type="submit">Add person</button></form>}<p className="demo-note" role="status">{notice || 'Demo profiles stay in this session. Live face enrollment is not connected yet.'}</p></>}
+      {panel === 'Inventory' && <><p className="panel-copy">What’s inside, and who it belongs to.</p><div className="filters"><label className="search-label">Search<input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Find an item or owner…"/></label><label>Owner<select value={owner} onChange={e => setOwner(e.target.value)}>{['Everyone', ...peopleNames].map(p => <option key={p}>{p}</option>)}</select></label></div><div className="inventory-list">{visibleItems.map(item => <div key={item.id} className="inventory-row"><button className="inventory-item" onClick={() => inspect(item)}>{item.placeholder ? <img className="food-mini placeholder-thumb" src={PLACEHOLDER_IMAGE} alt=""/> : <span className={`food-mini ${item.kind}`} style={{background: item.color}}/>}<span><strong>{item.name}</strong><small>Owner · {item.owner}</small></span><span className="item-code">{item.placeholder ? 'NEW' : `0${item.id}`} ↗</span></button>{!isLive && <button className="remove-item" onClick={() => removeItem(item)} aria-label={`Remove ${item.name}`} title="Remove">×</button>}</div>)}</div>{visibleItems.length === 0 && <p className="empty-state">No items match. Try another name or owner.</p>}{!isLive && (itemForm ? <form className="person-form item-form" onSubmit={addItem}><img className="placeholder-preview" src={PLACEHOLDER_IMAGE} alt="Placeholder image for the new item"/><label>Item name<input value={itemForm.name} onChange={e => setItemForm({ ...itemForm, name: e.target.value })} maxLength={40} required autoComplete="off" autoFocus/></label><label>Belongs to<select value={itemForm.owner} onChange={e => setItemForm({ ...itemForm, owner: e.target.value })}>{demoPeople.map(p => <option key={p}>{p}</option>)}</select></label><button className="primary-button" type="submit">Add</button><button className="text-button" type="button" onClick={() => setItemForm(null)}>Cancel</button></form> : <button className="primary-button" onClick={() => setItemForm({ name: '', owner: demoPeople[0] })}>+ Add item</button>)}<p className="demo-note" role="status">{itemNotice ? `${itemNotice} ` : ''}{visibleItems.length} of {inventory.length} items · {isLive ? 'Live inventory' : 'Demo inventory, changes last for this session'}</p></>}
+      {panel === 'History' && <><p className="panel-copy">Every put. Every take. Nothing swept under the rug.</p><label className="search-label">Search events<input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search by person, item or action…"/></label><div className="table-scroll"><table><thead><tr>{['Time', 'Action', 'Item', 'Person', 'Result'].map(h => <th key={h}>{h}</th>)}</tr></thead><tbody>{events.filter(e => Object.values(e).join(' ').toLowerCase().includes(query.toLowerCase())).map(e => <tr key={e.id}><td>{e.time}</td><td><span className="action-tag">{e.action}</span></td><td>{e.item}</td><td>{e.person}</td><td><span className={`result ${e.result.toLowerCase()}`}>{e.result}</span></td></tr>)}</tbody></table></div></>}
+      {panel === 'Alerts' && <><p className="panel-copy">A signal, not a verdict. Here’s what needs a closer look.</p>{events.filter(e => e.result !== 'Verified').map(e => <article className={`alert-card ${e.result.toLowerCase()}`} key={e.id}><span className="eyebrow">{e.result === 'Mismatch' ? '01 / OWNERSHIP MISMATCH' : '02 / UNCERTAIN IDENTITY'}</span><h3>{e.result === 'Mismatch' ? `Who took ${e.owner}’s ${e.item.toLowerCase()}?` : `${e.item} ${e.action === 'TAKE' ? 'left' : 'arrived'}. Identity unclear.`}</h3><p>{e.time} · Owner: {e.owner} · {e.result === 'Mismatch' ? `Taker: ${e.person}` : 'Person not reliably recognized'}</p><button onClick={() => { go({ to: '/events/$eventId', params: { eventId: e.id } }) }}>Inspect event ↗</button></article>)}</>}
+      {panel === 'People' && <><p className="panel-copy">Familiar faces in a shared space.</p>{isLive ? (
+        <>
+          <div className="people-list">{livePeople.map(p => <div className="person" key={p.person_id}><span className="avatar">{(p.name || '?')[0]}</span><strong>{p.name}</strong><span className="person-state">{p.enrollment_status}</span></div>)}</div>
+          <button className="primary-button" onClick={() => setAdding(!adding)} aria-expanded={adding}>+ Add person</button>
+          {adding && <form className="person-form" onSubmit={async e => {
+            e.preventDefault()
+            const pid = newPersonId.trim()
+            const n = newName.trim()
+            if (!pid || !n) return
+            try {
+              const res = await fetch(`${API_BASE}/people`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ person_id: pid, name: n }),
+              })
+              if (res.status === 409) {
+                setNotice('That ID already exists.')
+                return
+              }
+              if (!res.ok) {
+                setNotice('Failed to add person.')
+                return
+              }
+              setNewPersonId('')
+              setNewName('')
+              setAdding(false)
+              setNotice(`${n} added.`)
+              await refetch()
+            } catch {
+              setNotice('Failed to add person.')
+            }
+          }}>
+            <label>Person ID<input value={newPersonId} onChange={e => setNewPersonId(e.target.value)} required autoComplete="off" autoFocus/></label>
+            <label>Display name<input value={newName} onChange={e => setNewName(e.target.value)} maxLength={40} required autoComplete="off"/></label>
+            <button className="primary-button" type="submit">Add person</button>
+          </form>}
+          <p className="demo-note" role="status">{notice || 'Roster from the backend'}</p>
+        </>
+      ) : (
+        <>
+          <div className="people-list">{demoPeople.map((p, i) => <div className="person" key={p}><span className="avatar">{p[0]}</span><strong>{p}</strong><span className="person-state">{i < 4 ? 'DEMO PROFILE' : 'AWAITING ENROLLMENT'}</span></div>)}</div>
+          <button className="primary-button" onClick={() => setAdding(!adding)} aria-expanded={adding}>+ Add demo person</button>
+          {adding && <form className="person-form" onSubmit={e => { e.preventDefault(); const n = newName.trim(); if (!n) return; if (demoPeople.some(p => p.toLowerCase() === n.toLowerCase())) { setNotice('That name already exists.'); return } setDemoPeople([...demoPeople, n]); setNewName(''); setAdding(false); setNotice(`${n} added to this demo. Face enrollment needs the backend.`) }}><label>Display name<input value={newName} onChange={e => setNewName(e.target.value)} maxLength={40} required autoComplete="off"/></label><button className="primary-button" type="submit">Add person</button></form>}
+          <p className="demo-note" role="status">{notice || 'Demo profiles stay in this session. Live face enrollment is not connected yet.'}</p>
+        </>
+      )}</>}
       {(panel === 'Item details' || panel === 'Event details') && !selected && <p className="empty-state">This record does not exist. Open inventory or history from the navigation.</p>}
-      {panel === 'Item details' && selected && <>{selected.placeholder ? <img className="detail-object placeholder-detail" src={PLACEHOLDER_IMAGE} alt=""/> : <span className={`detail-object food-shape ${selected.kind}`} style={{'--food-color':selected.color}} aria-hidden="true"><span>{selected.name.split(' ')[0]}</span></span>}<h3 className="detail-title">{selected.name}</h3><dl><div><dt>Owner</dt><dd>{selected.owner}</dd></div><div><dt>Put in at</dt><dd>{selected.time}</dd></div><div><dt>Item ID</dt><dd>ITEM_{selected.id}</dd></div><div><dt>Status</dt><dd>Inside the fridge</dd></div></dl><div className="detail-actions"><button className="primary-button" onClick={() => navigate('Inventory')}>← All inventory</button><button className="text-button danger" onClick={() => removeItem(selected)}>Remove from fridge</button></div></>}
-      {panel === 'Event details' && selected && <><h3 className="detail-title">{selected.item}</h3><dl>{[['Action',selected.action],['Person',selected.person],['Owner',selected.owner],['Time',selected.time],['Confidence',selected.confidence],['Result',selected.result]].map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl><p className="demo-note">Low-confidence identities remain uncertain. All records shown are demo data.</p><button className="primary-button" onClick={() => navigate('Alerts')}>← Back to alerts</button></>}
+      {panel === 'Item details' && selected && <>{selected.placeholder ? <img className="detail-object placeholder-detail" src={PLACEHOLDER_IMAGE} alt=""/> : <span className={`detail-object food-shape ${selected.kind}`} style={{'--food-color':selected.color}} aria-hidden="true"><span>{selected.name.split(' ')[0]}</span></span>}<h3 className="detail-title">{selected.name}</h3><dl><div><dt>Owner</dt><dd>{selected.owner}</dd></div><div><dt>Put in at</dt><dd>{selected.time}</dd></div><div><dt>Item ID</dt><dd>ITEM_{selected.id}</dd></div><div><dt>Status</dt><dd>Inside the fridge</dd></div></dl><div className="detail-actions"><button className="primary-button" onClick={() => navigate('Inventory')}>← All inventory</button>{!isLive && <button className="text-button danger" onClick={() => removeItem(selected)}>Remove from fridge</button>}</div></>}
+      {panel === 'Event details' && selected && <><h3 className="detail-title">{selected.item}</h3><dl>{[['Action',selected.action],['Person',selected.person],['Owner',selected.owner],['Time',selected.time],['Confidence',selected.confidence],['Result',selected.result]].map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl><p className="demo-note">Low-confidence identities remain uncertain. {isLive ? 'Live records from the fridge cameras.' : 'All records shown are demo data.'}</p><button className="primary-button" onClick={() => navigate('Alerts')}>← Back to alerts</button></>}
     </Modal>}
   </div>
 }

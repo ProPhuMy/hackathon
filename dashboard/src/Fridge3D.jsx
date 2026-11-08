@@ -204,7 +204,7 @@ function FridgeWorld({
 
     const validSlots = new Set(
       items
-        .map((it) => DEMO_ID_TO_SLOT[it.id])
+        .map((it) => it.slot ?? DEMO_ID_TO_SLOT[it.id])
         .filter((slot) => slot !== undefined)
     );
 
@@ -225,7 +225,7 @@ function FridgeWorld({
   // Memoize cloned food visuals for each item in props.items
   const itemVisuals = useMemo(() => {
     return items.map((item, index) => {
-      const slot = DEMO_ID_TO_SLOT[item.id];
+      const slot = item.slot ?? DEMO_ID_TO_SLOT[item.id];
       const origNode = slot !== undefined ? model.getObjectByName(`Food_${slot}`) : null;
       let mesh = null;
       if (origNode) {
