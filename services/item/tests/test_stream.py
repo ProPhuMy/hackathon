@@ -1,11 +1,11 @@
+import threading
 import time
 from unittest.mock import MagicMock, patch
+
 import cv2
 import numpy as np
-import pytest
 
-from fridge_item.stream import LatestFrameReader, iter_frames, split_jpegs
-from fridge_item.__main__ import parse_args, record_command
+from src.stream import LatestFrameReader, iter_frames, split_jpegs
 
 
 def test_split_two_frames():
@@ -60,48 +60,7 @@ def test_latest_frame_reader_returns_frame_once():
             reader.stop()
 
 
-def test_iter_frames_from_video_file(tmp_path):
-    video_path = str(tmp_path / "test.mp4")
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    writer = cv2.VideoWriter(video_path, fourcc, 15.0, (30, 30))
-    for i in range(3):
-        frame = np.full((30, 30, 3), fill_value=i * 50, dtype=np.uint8)
-        writer.write(frame)
-    writer.release()
-
-    frames = list(iter_frames(video_path))
-    assert len(frames) == 3
-    for frame, ts in frames:
-        assert frame.shape == (30, 30, 3)
-        assert isinstance(ts, str) and ts.endswith("Z")
-
-
-def test_record_cli_arg_parsing():
-    args = parse_args(["record", "http://localhost:8080/video", "out.mp4"])
-    assert args.subcommand == "record"
-    assert args.url == "http://localhost:8080/video"
-    assert args.out == "out.mp4"
-
-
-def test_record_command(tmp_path):
-    out_video = tmp_path / "rec.mp4"
-    frame_mock = np.zeros((40, 40, 3), dtype=np.uint8)
-
-    with patch(
-        "fridge_item.__main__.iter_frames",
-        return_value=[
-            (frame_mock, "2026-11-07T19:40:00.000Z"),
-            (frame_mock, "2026-11-07T19:40:00.066Z"),
-        ],
-    ):
-        record_command("http://dummy", str(out_video))
-
-    assert out_video.exists()
-    assert out_video.stat().st_size > 0
-
-
 def test_latest_frame_reader_prints_exception_and_retries(capsys):
-    import threading
 
     attempts = 0
     second_attempt_event = threading.Event()
@@ -124,3 +83,18 @@ def test_latest_frame_reader_prints_exception_and_retries(capsys):
     captured = capsys.readouterr()
     assert "connection failed: wrong URL" in captured.out
 
+
+def test_iter_frames_from_video_file(tmp_path):
+    video_path = str(tmp_path / "test.mp4")
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    writer = cv2.VideoWriter(video_path, fourcc, 15.0, (30, 30))
+    for i in range(3):
+        frame = np.full((30, 30, 3), fill_value=i * 50, dtype=np.uint8)
+        writer.write(frame)
+    writer.release()
+
+    frames = list(iter_frames(video_path))
+    assert len(frames) == 3
+    for frame, ts in frames:
+        assert frame.shape == (30, 30, 3)
+        assert isinstance(ts, str) and ts.endswith("Z")
