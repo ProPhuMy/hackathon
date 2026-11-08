@@ -159,3 +159,16 @@ def test_detector_mocked():
         assert tracks[0].kind == "hand"
         assert tracks[0].label == "hand"
         assert pytest.approx(tracks[0].conf, 0.01) == 0.91
+
+
+def test_arm_counts_as_a_hand():
+    # Seen from above, the forearm is detected far more often than the hand itself.
+    tracks = to_tracks(
+        xyxy=np.array([[0, 0, 10, 10], [5, 5, 15, 15]], dtype=float),
+        ids=np.array([1, 2]),
+        conf=np.array([0.5, 0.8]),
+        cls=np.array([0, 1]),
+        names={0: "arm", 1: "bottle"},
+        hand_label="hand",
+    )
+    assert [t.kind for t in tracks] == ["hand", "item"]

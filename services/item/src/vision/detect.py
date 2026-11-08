@@ -33,7 +33,8 @@ def to_tracks(
         track_id = int(raw_id)
         class_idx = int(cls[i])
         label = names.get(class_idx, str(class_idx))
-        kind: Literal["hand", "item"] = "hand" if label == hand_label else "item"
+        # From above, the forearm is detected far more often than the hand (87 vs 48 of 129 frames).
+        kind: Literal["hand", "item"] = "hand" if label in (hand_label, "arm") else "item"
         box = Box(
             x1=float(xyxy[i, 0]),
             y1=float(xyxy[i, 1]),

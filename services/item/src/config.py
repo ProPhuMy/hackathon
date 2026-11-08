@@ -7,6 +7,7 @@ from .core.geometry import DoorLine
 
 DEFAULT_PROMPTS: list[str] = [
     "hand",
+    "arm",
     "bottle",
     "milk carton",
     "box",

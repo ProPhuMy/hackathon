@@ -22,8 +22,10 @@ class DoorDetector:
 
     def update(self, frame: np.ndarray) -> bool:
         mean_val = measure_brightness(frame, self.roi)
-        if mean_val > self.on:
+        # on < off means the ROI gets darker when the door opens (e.g. its shelves swing over the floor).
+        darkens = self.on < self.off
+        if (mean_val < self.on) if darkens else (mean_val > self.on):
             self.is_open = True
-        elif mean_val < self.off:
+        elif (mean_val > self.off) if darkens else (mean_val < self.off):
             self.is_open = False
         return self.is_open

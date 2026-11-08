@@ -122,7 +122,21 @@ def test_calibrate_insufficient_brightness_diff_raises(tmp_path: Path):
         (open_frame, "2026-11-07T19:40:00.133Z"),
     ]
     with headless_gui(frames):
-        with pytest.raises(ValueError, match="brighter"):
+        with pytest.raises(ValueError, match="barely changed"):
             calibrate_command("dummy_source", out_file)
 
     assert not out_file.exists()
+
+
+def test_calibrate_accepts_a_door_that_darkens_when_opened(tmp_path: Path):
+    out_file = tmp_path / "config.json"
+    frames = [
+        (np.full((100, 100, 3), 40, dtype=np.uint8), "2026-11-07T19:40:00.000Z"),
+        (np.full((100, 100, 3), 150, dtype=np.uint8), "2026-11-07T19:40:00.066Z"),  # closed
+        (np.full((100, 100, 3), 50, dtype=np.uint8), "2026-11-07T19:40:00.133Z"),  # open: darker
+    ]
+    with headless_gui(frames):
+        cfg = calibrate_command("dummy_source", out_file)
+    # c = 150, o = 50: on = 150 - 60 = 90, off = 150 - 40 = 110, so on < off marks "open is darker".
+    assert pytest.approx(cfg.door_on) == 90.0
+    assert pytest.approx(cfg.door_off) == 110.0
