@@ -429,8 +429,8 @@ Supported ONNX graph layout:
   confidence math, landmark-box pairing, invalid layouts, and WBF fusion.
 - No real-weight smoke test is claimed for YOLO5Face until a verified exported artifact is
   provided locally.
-- Full five-network runtime integration is now implemented:
+- Five-network components are implemented and unit-tested, but **not wired into `run`**. The live `run` command uses the SCRFD + ArcFace baseline (`Vision.single_face`, `models/baseline-policy.json`); do not present its output as the full ensemble. Components available for integration:
   - `DualGallery` ensures strictly separate template stores and independent coordinate spaces for ArcFace and AdaFace without vector-space averaging.
   - `FaceTracker` and `FaceTrack` implement BoT-SORT-style motion and appearance tracking using Kalman filters, IoU distance, and ArcFace appearance association, enforcing appearance continuity (rejecting cosine < 0.3) and per-track temporal evidence windows.
   - MagFace raw norm quantiles provide quality weighting for robust spherical temporal aggregation with angular outlier rejection.
-  - `src/cli/run.py` handles both baseline and calibrated conformal ensemble policies, outputting valid `person.seen` events with calibrated confidence and class-conditional conformal candidate evaluation.
+  - `src/cli/run.py` has an ensemble branch for conformal policies, but it is only reachable with a hand-written policy (a `calibrate-scores` policy lacks the `gallery`/`model` keys `run` requires) and it currently scores the AdaFace gallery with the ArcFace vector and never validates the AdaFace gallery — fix both before using it.
